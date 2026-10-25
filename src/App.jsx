@@ -17,7 +17,7 @@ import {
   avatarColors, defaultUser, indianContacts, starterChats, starterStories, wallpaperPresets
 } from "./data.js";
 
-const API = import.meta.env.VITE_API_URL ?? "";
+const API = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 const emptySettings = {
   theme: "dark",
   notifications: true,
@@ -62,7 +62,6 @@ export default function App() {
   const [wallpaperConfig, setWallpaperConfig] = useState(() => loadStored("blinker-wallpaper", defaultWallpaperConfig));
   const [stories, setStories] = useState(() => loadStored("blinker-stories", starterStories));
 
-  // Modals
   const [showProfile, setShowProfile] = useState(false);
   const [showWallpaper, setShowWallpaper] = useState(false);
   const [showCall, setShowCall] = useState(false);
@@ -86,7 +85,6 @@ export default function App() {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  // Messaging state
   const [replyTo, setReplyTo] = useState(null);
   const [typing, setTyping] = useState(false);
   const [editDraft, setEditDraft] = useState(null);
@@ -101,7 +99,6 @@ export default function App() {
 
   const chat = useMemo(() => chats.find((item) => item.id === activeId), [chats, activeId]);
 
-  // Persist state to localStorage
   useEffect(() => {
     try {
       localStorage.setItem("blinker-chats", JSON.stringify(chats));
@@ -120,10 +117,10 @@ export default function App() {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings]);
 
-  // Socket.io integration if connected
   useEffect(() => {
-    if (!token) return undefined;
-    const client = io(API || window.location.origin, { auth: { token }, transports: ["websocket", "polling"] });
+    if (!token || !API) return undefined;
+
+    const client = io(API, { auth: { token }, transports: ["websocket", "polling"] });
     setSocket(client);
     client.on("connect_error", () => {});
     client.on("message:new", (message) => {
@@ -139,11 +136,12 @@ export default function App() {
         }]
       }));
     });
+
     return () => {
       client.disconnect();
       setSocket(null);
     };
-  }, [token, user?.id]);
+  }, [token, user?.id, API]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -164,7 +162,6 @@ export default function App() {
   }
 
   function handleSelectContact(contact) {
-    // Check if chat already exists with this contact
     let existingChat = chats.find((c) => c.id === contact.id || c.phone === contact.phone);
     if (!existingChat) {
       existingChat = {
@@ -243,7 +240,6 @@ export default function App() {
     }));
     setReplyTo(null);
 
-    // Realistic Indian conversational reply simulation
     if (!chat.group && !chat.channel) {
       setTimeout(() => {
         setTyping(true);
@@ -467,7 +463,6 @@ export default function App() {
 
   return (
     <main className={`app-shell${mobileOpen ? " mobile-open" : ""}`}>
-      {/* Sidebar with Telegram folders, WhatsApp Stories, Contacts button, Android FAB and Navigation */}
       <ChatSidebar
         chats={chats}
         activeId={activeId}
@@ -498,7 +493,6 @@ export default function App() {
         onOpenInstall={() => setShowInstall(true)}
       />
 
-      {/* Main Conversation Window with custom wallpaper, in-chat search, voice notes and reactions */}
       <ChatWindow
         chat={chat}
         onBack={() => setMobileOpen(false)}
@@ -522,7 +516,6 @@ export default function App() {
         onReact={handleReact}
       />
 
-      {/* Chat Details Side Panel */}
       <aside className={`details-panel${showDetails ? " open" : ""}`} aria-label="Chat details">
         <button className="icon-button details-close" onClick={() => setShowDetails(false)} aria-label="Close details">
           <X size={18} />
@@ -580,7 +573,6 @@ export default function App() {
         )}
       </aside>
 
-      {/* Toast Notification */}
       {toast && (
         <motion.div className="toast" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} role="status">
           <span>{toast}</span>
@@ -588,7 +580,6 @@ export default function App() {
         </motion.div>
       )}
 
-      {/* Indian Phone Contacts Book Modal */}
       {showContacts && (
         <ContactsModal
           contacts={contacts}
@@ -599,7 +590,6 @@ export default function App() {
         />
       )}
 
-      {/* Modern Profile Modal */}
       {showProfile && (
         <ProfileModal
           user={user}
@@ -609,7 +599,6 @@ export default function App() {
         />
       )}
 
-      {/* WhatsApp Custom Chat Wallpaper Modal */}
       {showWallpaper && (
         <WallpaperModal
           wallpaperConfig={wallpaperConfig}
@@ -618,7 +607,6 @@ export default function App() {
         />
       )}
 
-      {/* Simulated Audio/Video Calling Screen */}
       {showCall && callContact && (
         <CallModal
           contact={callContact}
@@ -627,7 +615,6 @@ export default function App() {
         />
       )}
 
-      {/* WhatsApp Status / Telegram Stories Viewer */}
       {showStories && (
         <StatusViewer
           stories={stories}
@@ -638,7 +625,6 @@ export default function App() {
         />
       )}
 
-      {/* App Install / Download Modal */}
       {showInstall && (
         <InstallAppModal
           installPrompt={installPrompt}
@@ -657,7 +643,6 @@ export default function App() {
         />
       )}
 
-      {/* General Settings Modal */}
       {showSettings && (
         <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setShowSettings(false)}>
           <div className="modal settings-modal">
