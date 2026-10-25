@@ -1931,6 +1931,132 @@ kbd {
   margin-bottom: 12px;
 }
 
+/* ========================================================
+   INDIAN PHONE CONTACTS MODAL
+   ======================================================== */
+.contacts-modal-card {
+  width: min(520px, 100%);
+  max-height: min(780px, calc(100dvh - 36px));
+}
+.contacts-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-raised);
+  color: var(--muted);
+}
+.contacts-search-box input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+}
+.contacts-action-bar {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.new-contact-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: transparent;
+  text-align: left;
+  transition: background .15s ease;
+}
+.new-contact-row:hover { background: var(--panel-raised); }
+.new-contact-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #25d366, #00a884);
+  color: #fff;
+}
+.new-contact-text strong { display: block; font-size: 12px; color: var(--ink); }
+.new-contact-text small { color: var(--muted); font-size: 10px; }
+
+.add-contact-form {
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel-raised);
+  border-bottom: 1px solid var(--line);
+}
+.add-contact-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+}
+.contacts-scroll-list {
+  padding: 12px 16px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.contact-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px;
+  border-radius: 12px;
+  transition: background .15s ease;
+}
+.contact-list-item:hover { background: var(--panel-raised); }
+.contact-info {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.contact-info strong { font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.contact-info small { color: var(--blue); font-size: 10px; }
+.contact-status-text { color: var(--muted); font-size: 10px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.contact-actions { display: flex; align-items: center; gap: 6px; }
+.contact-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 600;
+  transition: all .15s ease;
+}
+.contact-chat-btn:hover {
+  background: var(--blue);
+  color: #fff;
+}
+.wallpaper-open-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--panel-raised);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 6px;
+}
+.wallpaper-open-btn:hover { background: var(--panel-soft); }
+
 /* Image Lightbox */
 .image-viewer-overlay {
   position: fixed;

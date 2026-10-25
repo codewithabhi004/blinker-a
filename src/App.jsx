@@ -3,8 +3,6 @@ import { motion } from "framer-motion";
 import {
   Bell, Check, ChevronRight, Moon, Phone, Search, Shield, Sun, Users, X
 } from "lucide-react";
-import { Capacitor } from "@capacitor/core";
-import { Contacts } from "@capacitor-community/contacts";
 import { io } from "socket.io-client";
 import Avatar from "./components/Avatar.jsx";
 import ChatSidebar from "./components/ChatSidebar.jsx";
@@ -13,8 +11,9 @@ import CallModal from "./components/CallModal.jsx";
 import StatusViewer from "./components/StatusViewer.jsx";
 import ProfileModal from "./components/ProfileModal.jsx";
 import WallpaperModal from "./components/WallpaperModal.jsx";
+import ContactsModal from "./components/ContactsModal.jsx";
 import {
-  avatarColors, defaultUser, starterChats, starterStories, wallpaperPresets
+  avatarColors, defaultUser, indianContacts, starterChats, starterStories, wallpaperPresets
 } from "./data.js";
 
 const API = import.meta.env.VITE_API_URL ?? "";
@@ -22,15 +21,16 @@ const emptySettings = {
   theme: "dark",
   notifications: true,
   discoverable: true,
-  countryCode: ""
+  countryCode: "+91"
 };
 
 const defaultWallpaperConfig = {
   type: "preset",
-  id: "aurora",
-  name: "Telegram Aurora",
-  bg: "radial-gradient(ellipse at 45% -20%, rgba(112, 91, 187, .25), transparent 60%), radial-gradient(ellipse at 95% 70%, rgba(60, 122, 168, .2), transparent 50%), #0d1118",
-  dim: 20,
+  id: "whatsapp-doodle",
+  name: "WhatsApp Classic",
+  bg: "#0b141a",
+  pattern: "doodle",
+  dim: 15,
   blur: 0
 };
 
@@ -51,7 +51,8 @@ function AvatarColor(index) {
 
 export default function App() {
   const [chats, setChats] = useState(() => loadStored("blinker-chats", starterChats));
-  const [activeId, setActiveId] = useState(() => loadStored("blinker-active", "sophie"));
+  const [contacts, setContacts] = useState(() => loadStored("blinker-contacts", indianContacts));
+  const [activeId, setActiveId] = useState(() => loadStored("blinker-active", "priya"));
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [mobileTab, setMobileTab] = useState("chats");
@@ -64,11 +65,11 @@ export default function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showWallpaper, setShowWallpaper] = useState(false);
   const [showCall, setShowCall] = useState(false);
+  const [callContact, setCallContact] = useState(null);
   const [isVideoCall, setIsVideoCall] = useState(false);
   const [showStories, setShowStories] = useState(false);
   const [storyIndex, setStoryIndex] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
-  const [showAuth, setShowAuth] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -78,10 +79,8 @@ export default function App() {
   const [typing, setTyping] = useState(false);
   const [editDraft, setEditDraft] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [login, setLogin] = useState({ identifier: "", code: "", sent: false, busy: false, error: "" });
   const [token, setToken] = useState(() => localStorage.getItem("blinker-token"));
   const [socket, setSocket] = useState(null);
-  const [contactMatches, setContactMatches] = useState([]);
   const [toast, setToast] = useState("");
 
   const typingTimer = useRef(null);
@@ -90,10 +89,11 @@ export default function App() {
 
   const chat = useMemo(() => chats.find((item) => item.id === activeId), [chats, activeId]);
 
-  // Persist state
+  // Persist state to localStorage
   useEffect(() => {
     try {
       localStorage.setItem("blinker-chats", JSON.stringify(chats));
+      localStorage.setItem("blinker-contacts", JSON.stringify(contacts));
       localStorage.setItem("blinker-active", JSON.stringify(activeId));
       localStorage.setItem("blinker-settings", JSON.stringify(settings));
       localStorage.setItem("blinker-user", JSON.stringify(user));
@@ -102,7 +102,7 @@ export default function App() {
     } catch {
       // Local storage full
     }
-  }, [chats, activeId, settings, user, wallpaperConfig, stories]);
+  }, [chats, contacts, activeId, settings, user, wallpaperConfig, stories]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
@@ -151,6 +151,45 @@ export default function App() {
     setReplyTo(null);
   }
 
+  function handleSelectContact(contact) {
+    // Check if chat already exists with this contact
+    let existingChat = chats.find((c) => c.id === contact.id || c.phone === contact.phone);
+    if (!existingChat) {
+      existingChat = {
+        id: contact.id,
+        name: contact.name,
+        username: `@${contact.name.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
+        phone: contact.phone,
+        bio: contact.status || "Hey there! I am using Blinker-a 🇮🇳",
+        avatarUrl: contact.avatarUrl,
+        color: contact.color || AvatarColor(chats.length),
+        online: contact.online ?? true,
+        statusText: contact.online ? "online now" : "last seen recently",
+        type: "direct",
+        unread: 0,
+        messages: [
+          {
+            id: `welcome-${Date.now()}`,
+            from: "them",
+            sender: contact.name,
+            text: `Namaste Abhishek! Kaise ho? Glad to connect on Blinker-a ✨`,
+            time: nowLabel()
+          }
+        ]
+      };
+      setChats([existingChat, ...chats]);
+    }
+    setActiveId(existingChat.id);
+    setMobileOpen(true);
+    setShowContacts(false);
+    setToast(`Chat started with ${contact.name}`);
+  }
+
+  function handleAddContact(newContact) {
+    setContacts([newContact, ...contacts]);
+    handleSelectContact(newContact);
+  }
+
   function sendMessage({ text, file, kind, voiceDuration, waveform }) {
     if (!chat) return;
 
@@ -181,7 +220,7 @@ export default function App() {
       fileName: file?.name,
       fileUrl,
       kind: isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : file ? "file" : "text",
-      voiceDuration: voiceDuration || (isAudio ? "0:08" : undefined),
+      voiceDuration: voiceDuration || (isAudio ? "0:12" : undefined),
       waveform: waveform || (isAudio ? [30, 60, 90, 70, 40, 80, 100, 75, 45, 60, 85, 40, 30, 60, 90, 50, 30] : undefined),
       reactions: []
     };
@@ -192,18 +231,29 @@ export default function App() {
     }));
     setReplyTo(null);
 
-    // Simulated responsive reply for interactive feel
-    if (!chat.group && !chat.channel && chat.id === "sophie") {
+    // Realistic Indian conversational reply simulation
+    if (!chat.group && !chat.channel) {
       setTimeout(() => {
         setTyping(true);
         setTimeout(() => {
           setTyping(false);
-          const replyText = text.toLowerCase().includes("photo") || text.toLowerCase().includes("camera")
-            ? "That sounds amazing! I can bring along my 35mm lens too 📸"
-            : text.toLowerCase().includes("hi") || text.toLowerCase().includes("hey")
-            ? "Hey Alex! How's your project coming along?"
-            : "Got it! Thanks for sharing ✨ Let's catch up more soon.";
-          
+          let replyText = "Haan bhai, bilkul sahi baat hai!";
+          const lower = (text || "").toLowerCase();
+
+          if (lower.includes("kaisa") || lower.includes("kaise") || lower.includes("how")) {
+            replyText = "Sab badhiya chal raha hai Abhishek! Tum sunao, kya plan hai aaj shaam ka?";
+          } else if (lower.includes("chai") || lower.includes("tea") || lower.includes("coffee")) {
+            replyText = "Haan yaar, ek adrak wali kadak chai toh banti hai! ☕";
+          } else if (lower.includes("match") || lower.includes("cricket") || lower.includes("score")) {
+            replyText = "Aaj India ka match bohot exciting hai! Rohit aur Kohli dono form me hain 🏏🔥";
+          } else if (lower.includes("photo") || lower.includes("camera") || lower.includes("pic")) {
+            replyText = "Bohot shaandar clicks hain! Insta aur Blinker status pe daal do 📸✨";
+          } else if (lower.includes("call") || lower.includes("phone")) {
+            replyText = "Haan bilkul, thodi der me call karta hoon!";
+          } else {
+            replyText = "Bohot badhiya! Main thodi der me message karta hoon free hoke 👍";
+          }
+
           updateChat(chat.id, (c) => ({
             ...c,
             messages: [
@@ -218,8 +268,8 @@ export default function App() {
               }
             ]
           }));
-        }, 1600);
-      }, 1000);
+        }, 1500);
+      }, 900);
     }
   }
 
@@ -315,8 +365,10 @@ export default function App() {
     }));
   }
 
-  function handleStartCall(isVideo) {
-    if (!chat) return;
+  function handleStartCall(targetContact, isVideo = false) {
+    const c = targetContact || chat;
+    if (!c) return;
+    setCallContact(c);
     setIsVideoCall(isVideo);
     setShowCall(true);
   }
@@ -354,7 +406,7 @@ export default function App() {
   }
 
   async function createGroup() {
-    const name = window.prompt("Name your group or channel:");
+    const name = window.prompt("Name your Indian group or channel (e.g. Friends Adda, College Buddies):");
     if (!name?.trim()) return;
     const requestedType = window.prompt("Create a group or channel? Enter 'group' or 'channel'.", "group");
     if (!requestedType) return;
@@ -390,7 +442,7 @@ export default function App() {
 
   function handleUpdateUser(updated) {
     setUser(updated);
-    setToast("Profile and bio updated successfully!");
+    setToast("Indian profile and bio updated successfully!");
   }
 
   function signOut() {
@@ -398,12 +450,12 @@ export default function App() {
     setToken(null);
     setUser(defaultUser);
     setShowProfile(false);
-    setToast("Signed out. Default profile restored.");
+    setToast("Default profile restored.");
   }
 
   return (
     <main className={`app-shell${mobileOpen ? " mobile-open" : ""}`}>
-      {/* Sidebar with Telegram folders, WhatsApp Stories, Android FAB and Navigation */}
+      {/* Sidebar with Telegram folders, WhatsApp Stories, Contacts button, Android FAB and Navigation */}
       <ChatSidebar
         chats={chats}
         activeId={activeId}
@@ -424,8 +476,13 @@ export default function App() {
           setShowStories(true);
         }}
         mobileTab={mobileTab}
-        onSetMobileTab={setMobileTab}
-        onStartCall={() => handleStartCall(false)}
+        onSetMobileTab={(tab) => {
+          setMobileTab(tab);
+          if (tab === "calls") handleStartCall(chat, false);
+          if (tab === "status") handleOpenStory(0);
+          if (tab === "profile") setShowProfile(true);
+        }}
+        onStartCall={() => handleStartCall(chat, false)}
       />
 
       {/* Main Conversation Window with custom wallpaper, in-chat search, voice notes and reactions */}
@@ -446,7 +503,7 @@ export default function App() {
         editText={editDraft}
         onCancelEdit={() => { setEditingId(null); setEditDraft(null); }}
         onError={setToast}
-        onStartCall={handleStartCall}
+        onStartCall={(isVideo) => handleStartCall(chat, isVideo)}
         onOpenWallpaper={() => setShowWallpaper(true)}
         wallpaperConfig={wallpaperConfig}
         onReact={handleReact}
@@ -466,13 +523,13 @@ export default function App() {
               <small>{chat.username || "@username"}</small>
               {chat.phone && <p className="details-phone">{chat.phone}</p>}
               {chat.bio && <p className="details-bio">"{chat.bio}"</p>}
-              <span className="details-encryption"><Shield size={13} /> End-to-end encrypted</span>
+              <span className="details-encryption"><Shield size={13} /> End-to-end encrypted · Made in India</span>
             </div>
 
             <div className="details-section">
               <div className="section-label">ACTIONS</div>
               <div className="details-action-buttons">
-                <button type="button" className="action-pill" onClick={() => handleStartCall(false)}>
+                <button type="button" className="action-pill" onClick={() => handleStartCall(chat, false)}>
                   <Phone size={15} /> Voice Call
                 </button>
                 <button type="button" className="action-pill" onClick={() => setShowWallpaper(true)}>
@@ -484,10 +541,10 @@ export default function App() {
             <div className="details-section">
               <div className="section-label">SHARED MEDIA</div>
               <div className="shared-media">
-                <span>🌊</span>
-                <span>🌿</span>
-                <span>☀️</span>
+                <span>🪔</span>
                 <span>☕</span>
+                <span>🏏</span>
+                <span>🏖️</span>
               </div>
             </div>
 
@@ -495,8 +552,8 @@ export default function App() {
               <div className="details-section">
                 <div className="section-label">MEMBERS ({chat.membersCount || 2})</div>
                 <div className="member-row">
-                  <Avatar name={user?.name || "You"} color="#9088e8" photo={user?.avatarUrl} small />
-                  <span>{user?.name || "You"}</span>
+                  <Avatar name={user?.name || "Abhishek"} color="#9088e8" photo={user?.avatarUrl} small />
+                  <span>{user?.name || "Abhishek Upadhyay"}</span>
                   <small>you</small>
                 </div>
                 <div className="member-row">
@@ -516,6 +573,17 @@ export default function App() {
           <span>{toast}</span>
           <button onClick={() => setToast("")} aria-label="Dismiss"><X size={14} /></button>
         </motion.div>
+      )}
+
+      {/* Indian Phone Contacts Book Modal */}
+      {showContacts && (
+        <ContactsModal
+          contacts={contacts}
+          onSelectContact={handleSelectContact}
+          onAddContact={handleAddContact}
+          onStartCall={(contact, isVideo) => handleStartCall(contact, isVideo)}
+          onClose={() => setShowContacts(false)}
+        />
       )}
 
       {/* Modern Profile Modal */}
@@ -538,9 +606,9 @@ export default function App() {
       )}
 
       {/* Simulated Audio/Video Calling Screen */}
-      {showCall && chat && (
+      {showCall && callContact && (
         <CallModal
-          contact={chat}
+          contact={callContact}
           isVideo={isVideoCall}
           onClose={() => setShowCall(false)}
         />
@@ -570,7 +638,7 @@ export default function App() {
             </div>
 
             <div className="settings-block">
-              <h3>Appearance</h3>
+              <h3>Theme</h3>
               <div className="theme-picker">
                 <button
                   className={settings.theme === "dark" ? "selected" : ""}
@@ -595,6 +663,13 @@ export default function App() {
             </div>
 
             <div className="settings-block">
+              <h3>Phone Directory & Contacts</h3>
+              <button className="wallpaper-open-btn" onClick={() => { setShowSettings(false); setShowContacts(true); }}>
+                Open Indian Phone Contacts (+91) <ChevronRight size={16} />
+              </button>
+            </div>
+
+            <div className="settings-block">
               <h3>Privacy & Security</h3>
               <label className="setting-row">
                 <span><Bell size={16} /> Push Notifications</span>
@@ -605,7 +680,7 @@ export default function App() {
                 />
               </label>
               <label className="setting-row">
-                <span><Users size={16} /> Phone Number Discoverability</span>
+                <span><Users size={16} /> Let contacts find me by phone (+91)</span>
                 <input
                   type="checkbox"
                   checked={settings.discoverable}

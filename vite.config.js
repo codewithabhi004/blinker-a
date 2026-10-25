@@ -104,6 +104,7 @@ function mockApiPlugin() {
 }
 
 export default defineConfig({
+  base: "./",
   plugins: [react(), mockApiPlugin()],
   server: {
     host: "0.0.0.0",
