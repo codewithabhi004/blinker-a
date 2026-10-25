@@ -97,6 +97,38 @@ function mockApiPlugin() {
           return res.end(JSON.stringify({ contacts: [] }));
         }
 
+        if (req.url === "/api/github/push" && req.method === "POST") {
+          let body = "";
+          req.on("data", chunk => { body += chunk; });
+          req.on("end", async () => {
+            try {
+              const { exec } = await import("node:child_process");
+              const data = body ? JSON.parse(body) : {};
+              const token = data.token ? data.token.trim() : "";
+              if (!token) {
+                res.statusCode = 400;
+                return res.end(JSON.stringify({ error: "Please enter your GitHub token." }));
+              }
+              exec(`git push https://${token}@github.com/codewithabhi004/blinker-a.git main`, (err, stdout, stderr) => {
+                if (err) {
+                  res.statusCode = 500;
+                  return res.end(JSON.stringify({ error: stderr || err.message }));
+                }
+                return res.end(JSON.stringify({
+                  success: true,
+                  message: "Successfully pushed to GitHub!",
+                  repoUrl: "https://github.com/codewithabhi004/blinker-a",
+                  pagesUrl: "https://codewithabhi004.github.io/blinker-a/"
+                }));
+              });
+            } catch (e) {
+              res.statusCode = 500;
+              return res.end(JSON.stringify({ error: e.message }));
+            }
+          });
+          return;
+        }
+
         return next();
       });
     }

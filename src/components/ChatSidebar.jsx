@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import {
-  Archive, BellOff, Check, CheckCheck, CircleHelp, ContactRound, Download, MessageCircle,
+  Archive, BellOff, Check, CheckCheck, CircleHelp, ContactRound, Download, Github, MessageCircle,
   MoreHorizontal, Phone, Plus, Radio, Search, Settings2, Sparkles, User, Users, X
 } from "lucide-react";
 import Avatar from "./Avatar.jsx";
@@ -8,7 +8,7 @@ import Avatar from "./Avatar.jsx";
 export default function ChatSidebar({
   chats, activeId, onSelect, query, onQuery, filter, onFilter, onNewChat,
   onContacts, onSettings, onProfile, user, stories, onOpenStory, onOpenStatusCreator,
-  mobileTab, onSetMobileTab, onStartCall, onOpenInstall
+  mobileTab, onSetMobileTab, onStartCall, onOpenInstall, onOpenGitHub
 }) {
   // Telegram-style folder filtering
   const filtered = chats.filter((chat) => {
@@ -43,6 +43,9 @@ export default function ChatSidebar({
           <div className="brand-actions">
             <button className="icon-button install-app-btn" onClick={onOpenInstall} title="Download / Install App" aria-label="Install app">
               <Download size={18} />
+            </button>
+            <button className="icon-button github-btn" onClick={onOpenGitHub} title="Push to GitHub (codewithabhi004)" aria-label="GitHub Sync">
+              <Github size={18} />
             </button>
             <button className="icon-button" onClick={onNewChat} title="Create Group or Channel" aria-label="New chat">
               <Plus size={19} />
