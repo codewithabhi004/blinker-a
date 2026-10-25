@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ChatType {
+  PRIVATE
+  GROUP
+  CHANNEL
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum MessageKind {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  CODE
+}
+
+model User {
+  id                     String       @id @default(cuid())
+  phone                  String?      @unique
+  email                  String?      @unique
+  name                   String
+  username               String?      @unique
+  avatarUrl              String?
+  bio                    String?      @db.VarChar(160)
+  discoverableByPhone    Boolean      @default(false)
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+  memberships            ChatMember[]
+  sentMessages           Message[]    @relation("MessageSender")
+  receipts               MessageReceipt[]
+  hiddenMessages         HiddenMessage[]
+
+  @@index([discoverableByPhone, phone])
+}
+
+model Chat {
+  id              String       @id @default(cuid())
+  type            ChatType     @default(PRIVATE)
+  title           String?
+  username        String?      @unique
+  description     String?      @db.VarChar(500)
+  isPublic        Boolean      @default(false)
+  pinnedMessageId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  members         ChatMember[]
+  group           Group?
+  messages        Message[]    @relation("ChatMessages")
+  pinnedMessage   Message?     @relation("PinnedMessage", fields: [pinnedMessageId], references: [id], onDelete: SetNull)
+
+  @@index([type, isPublic])
+}
+
+model Group {
+  chatId            String   @id
+  membersCanInvite  Boolean  @default(true)
+  membersCanPin     Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+  chat              Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+}
+
+model ChatMember {
+  chatId    String
+  userId    String
+  role      MemberRole @default(MEMBER)
+  joinedAt  DateTime   @default(now())
+  muted     Boolean    @default(false)
+  chat      Chat       @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([chatId, userId])
+  @@index([userId, joinedAt])
+}
+
+model Message {
+  id               String           @id @default(cuid())
+  chatId           String
+  senderId         String
+  replyToId        String?
+  forwardedFromId  String?
+  kind             MessageKind      @default(TEXT)
+  text             String?          @db.VarChar(4000)
+  mediaUrl         String?
+  mediaName        String?
+  editedAt         DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  chat             Chat             @relation("ChatMessages", fields: [chatId], references: [id], onDelete: Cascade)
+  sender           User             @relation("MessageSender", fields: [senderId], references: [id], onDelete: Restrict)
+  replyTo          Message?         @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies          Message[]        @relation("MessageReplies")
+  receipts         MessageReceipt[]
+  hiddenFor        HiddenMessage[]
+  pinnedInChats    Chat[]           @relation("PinnedMessage")
+
+  @@index([chatId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model MessageReceipt {
+  messageId String
+  userId    String
+  deliveredAt DateTime?
+  readAt    DateTime?
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([userId, readAt])
+}
+
+model HiddenMessage {
+  messageId String
+  userId    String
+  hiddenAt  DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+}
+
+model LoginCode {
+  id         String   @id @default(cuid())
+  identifier String   @unique
+  codeHash   String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  attempts   Int      @default(0)
+
+  @@index([expiresAt])
+}

@@ -1,0 +1,8 @@
+{
+  "appId": "com.blinkera.app",
+  "appName": "Blinker-a",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

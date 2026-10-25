@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Blinker-a</string>
+    <string name="title_activity_main">Blinker-a</string>
+    <string name="package_name">com.blinkera.app</string>
+    <string name="custom_url_scheme">com.blinkera.app</string>
+</resources>
