@@ -13,7 +13,6 @@ import ProfileModal from "./components/ProfileModal.jsx";
 import WallpaperModal from "./components/WallpaperModal.jsx";
 import ContactsModal from "./components/ContactsModal.jsx";
 import InstallAppModal from "./components/InstallAppModal.jsx";
-import GitHubModal from "./components/GitHubModal.jsx";
 import {
   avatarColors, defaultUser, indianContacts, starterChats, starterStories, wallpaperPresets
 } from "./data.js";
@@ -74,7 +73,6 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
-  const [showGitHub, setShowGitHub] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -498,7 +496,6 @@ export default function App() {
         }}
         onStartCall={() => handleStartCall(chat, false)}
         onOpenInstall={() => setShowInstall(true)}
-        onOpenGitHub={() => setShowGitHub(true)}
       />
 
       {/* Main Conversation Window with custom wallpaper, in-chat search, voice notes and reactions */}
@@ -657,14 +654,6 @@ export default function App() {
             setShowInstall(false);
           }}
           onClose={() => setShowInstall(false)}
-        />
-      )}
-
-      {/* GitHub Sync Modal */}
-      {showGitHub && (
-        <GitHubModal
-          onClose={() => setShowGitHub(false)}
-          onSuccess={() => setToast("Pushed to GitHub & live on GitHub Pages!")}
         />
       )}
 
