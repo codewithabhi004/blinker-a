@@ -3,7 +3,7 @@ export const defaultUser = {
   name: "Abhishek Upadhyay",
   username: "abhishek_u",
   phone: "+91 98765 43210",
-  email: "codewithabhi044@gmail.com",
+  email: "abhishekupadhyay9878@gmail.com",
   bio: "Software developer & creator from India 🇮🇳 ✨ Chai, Code & Cricket!",
   status: "✨ Proudly Made in India | Blinker-a",
   statusEmoji: "🇮🇳",

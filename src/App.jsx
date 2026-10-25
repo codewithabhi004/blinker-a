@@ -12,6 +12,7 @@ import StatusViewer from "./components/StatusViewer.jsx";
 import ProfileModal from "./components/ProfileModal.jsx";
 import WallpaperModal from "./components/WallpaperModal.jsx";
 import ContactsModal from "./components/ContactsModal.jsx";
+import InstallAppModal from "./components/InstallAppModal.jsx";
 import {
   avatarColors, defaultUser, indianContacts, starterChats, starterStories, wallpaperPresets
 } from "./data.js";
@@ -71,8 +72,19 @@ export default function App() {
   const [storyIndex, setStoryIndex] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
 
   // Messaging state
   const [replyTo, setReplyTo] = useState(null);
@@ -483,6 +495,7 @@ export default function App() {
           if (tab === "profile") setShowProfile(true);
         }}
         onStartCall={() => handleStartCall(chat, false)}
+        onOpenInstall={() => setShowInstall(true)}
       />
 
       {/* Main Conversation Window with custom wallpaper, in-chat search, voice notes and reactions */}
@@ -622,6 +635,25 @@ export default function App() {
           onClose={() => setShowStories(false)}
           onAddStory={handleAddStory}
           onReplyStory={handleReplyStory}
+        />
+      )}
+
+      {/* App Install / Download Modal */}
+      {showInstall && (
+        <InstallAppModal
+          installPrompt={installPrompt}
+          onTriggerInstall={async () => {
+            if (installPrompt) {
+              await installPrompt.prompt();
+              const choice = await installPrompt.userChoice;
+              if (choice.outcome === "accepted") {
+                setToast("Blinker-a app successfully installed on your phone!");
+              }
+              setInstallPrompt(null);
+            }
+            setShowInstall(false);
+          }}
+          onClose={() => setShowInstall(false)}
         />
       )}
 

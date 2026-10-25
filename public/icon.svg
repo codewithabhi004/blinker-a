@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b141a" />
+      <stop offset="100%" stop-color="#141e2b" />
+    </linearGradient>
+    <linearGradient id="tri" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF9933" />
+      <stop offset="50%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#138808" />
+    </linearGradient>
+    <linearGradient id="bubble" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#25d366" />
+      <stop offset="100%" stop-color="#00a884" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="120" fill="url(#bg)" />
+
+  <!-- Tricolor Accent Ring -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="url(#tri)" stroke-width="8" opacity="0.8" />
+
+  <!-- Main Chat Bubble -->
+  <path d="M256 120 C 170 120, 100 180, 100 256 C 100 295, 118 330, 148 355 L 132 410 L 195 385 C 214 391, 235 394, 256 394 C 342 394, 412 334, 412 256 C 412 180, 342 120, 256 120 Z" fill="url(#bubble)" />
+
+  <!-- Lightning / Sparkle Icon (Blinker) -->
+  <path d="M270 180 L 210 270 L 260 270 L 240 340 L 310 250 L 260 250 Z" fill="#ffffff" />
+</svg>

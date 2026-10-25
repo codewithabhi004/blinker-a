@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import {
-  Archive, BellOff, Check, CheckCheck, CircleHelp, ContactRound, MessageCircle,
+  Archive, BellOff, Check, CheckCheck, CircleHelp, ContactRound, Download, MessageCircle,
   MoreHorizontal, Phone, Plus, Radio, Search, Settings2, Sparkles, User, Users, X
 } from "lucide-react";
 import Avatar from "./Avatar.jsx";
@@ -8,7 +8,7 @@ import Avatar from "./Avatar.jsx";
 export default function ChatSidebar({
   chats, activeId, onSelect, query, onQuery, filter, onFilter, onNewChat,
   onContacts, onSettings, onProfile, user, stories, onOpenStory, onOpenStatusCreator,
-  mobileTab, onSetMobileTab, onStartCall
+  mobileTab, onSetMobileTab, onStartCall, onOpenInstall
 }) {
   // Telegram-style folder filtering
   const filtered = chats.filter((chat) => {
@@ -41,6 +41,9 @@ export default function ChatSidebar({
           </div>
 
           <div className="brand-actions">
+            <button className="icon-button install-app-btn" onClick={onOpenInstall} title="Download / Install App" aria-label="Install app">
+              <Download size={18} />
+            </button>
             <button className="icon-button" onClick={onNewChat} title="Create Group or Channel" aria-label="New chat">
               <Plus size={19} />
             </button>
@@ -50,7 +53,17 @@ export default function ChatSidebar({
           </div>
         </div>
 
-        {/* Search input with ⌘K */}
+        {/* In-App Download / Install Banner for Android */}
+        <div className="sidebar-app-banner" onClick={onOpenInstall} role="button" tabIndex="0">
+          <span className="banner-flag">🇮🇳</span>
+          <div className="banner-copy">
+            <strong>Blinker-a for Android</strong>
+            <small>Install app on your phone</small>
+          </div>
+          <span className="banner-install-tag">Install 📱</span>
+        </div>
+
+        {/* Search input with Indian symbol */}
         <label className="search-box">
           <Search size={16} />
           <input
@@ -62,7 +75,7 @@ export default function ChatSidebar({
           {query ? (
             <button type="button" className="clear-search-btn" onClick={() => onQuery("")}><X size={14} /></button>
           ) : (
-            <kbd>⌘ K</kbd>
+            <span className="india-search-symbol" title="Bharat 🇮🇳 (+91)">🇮🇳 +91</span>
           )}
         </label>
 
