@@ -136,7 +136,7 @@ function mockApiPlugin() {
 }
 
 export default defineConfig({
-  base: "./",
+  base: "/blinker-a/",
   plugins: [react(), mockApiPlugin()],
   server: {
     host: "0.0.0.0",
@@ -144,4 +144,3 @@ export default defineConfig({
     allowedHosts: true,
   }
 });
-
