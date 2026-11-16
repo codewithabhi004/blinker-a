@@ -1,23 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft, Check, CheckCheck, ChevronDown, ChevronUp, Download, FileText,
-  Flame, Heart, Image as ImageIcon, MoreHorizontal, Phone, Pin, Search,
-  Share2, ShieldCheck, Smile, ThumbsUp, Trash2, Video, X
+  ArrowLeft, Check, CheckCheck, ChevronDown, Download, FileText,
+  Image as ImageIcon, MoreHorizontal, Pin, Search, ShieldCheck, Trash2, X
 } from "lucide-react";
 import Avatar from "./Avatar.jsx";
 import MessageInput from "./MessageInput.jsx";
 import VoiceNotePlayer from "./VoiceNotePlayer.jsx";
 
-const reactionList = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
-
 function MessageRow({
-  message, chat, onReply, onEdit, onDelete, onForward, onPin,
-  onReact, onImageClick, isHighlighted
+  message, chat, onReply, onEdit, onDelete, onForward, onPin, onImageClick, isHighlighted
 }) {
   const mine = message.from === "me";
   const deleted = message.deleted;
-  const [showReactBar, setShowReactBar] = useState(false);
 
   return (
     <motion.article
@@ -79,58 +74,14 @@ function MessageRow({
           </div>
         </div>
 
-        {/* Reactions pill badge */}
-        {message.reactions && message.reactions.length > 0 && (
-          <div className="message-reactions-row">
-            {message.reactions.map((react, i) => (
-              <button
-                key={i}
-                type="button"
-                className={`reaction-pill ${react.mine ? "mine" : ""}`}
-                onClick={() => onReact(message.id, react.emoji)}
-                title="Reaction"
-              >
-                <span>{react.emoji}</span>
-                {react.count > 1 && <span className="react-count">{react.count}</span>}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Message hover/tap action bar */}
         {!deleted && (
           <div className="message-actions">
-            <button
-              onClick={() => setShowReactBar(!showReactBar)}
-              title="Add reaction"
-              className="react-trigger-btn"
-            >
-              <Smile size={13} />
-            </button>
             <button onClick={() => onReply(message)} title="Reply"><ArrowLeft size={13} /></button>
             <button onClick={() => onForward(message)} title="Forward"><ChevronDown size={13} /></button>
             <button onClick={() => onPin(message)} title="Pin message"><Pin size={13} /></button>
             {mine && <button onClick={() => onEdit(message)} title="Edit message"><MoreHorizontal size={13} /></button>}
             <button onClick={() => onDelete(message)} title="Delete message"><Trash2 size={13} /></button>
-
-            {/* Quick emoji reaction popup bar */}
-            {showReactBar && (
-              <div className="reaction-picker-popup">
-                {reactionList.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => {
-                      onReact(message.id, emoji);
-                      setShowReactBar(false);
-                    }}
-                    className="popup-emoji"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -142,8 +93,8 @@ function MessageRow({
 
 export default function ChatWindow({
   chat, onBack, onSend, onTyping, onReply, onEdit, onDelete, onForward, onPin,
-  onDetails, replyTo, onCancelReply, typing, editText, onCancelEdit, onError,
-  onStartCall, onOpenWallpaper, wallpaperConfig, onReact
+  onDetails, replyTo, onCancelReply, typing, editText, onCancelEdit,
+  onOpenWallpaper, wallpaperConfig
 }) {
   const scrollRef = useRef(null);
   const [inChatSearch, setInChatSearch] = useState(false);
@@ -213,26 +164,6 @@ export default function ChatWindow({
         </button>
 
         <div className="header-actions">
-          {/* Voice Call Button */}
-          <button
-            className="icon-button"
-            title="Audio Call"
-            aria-label="Audio Call"
-            onClick={() => onStartCall(false)}
-          >
-            <Phone size={18} />
-          </button>
-
-          {/* Video Call Button */}
-          <button
-            className="icon-button"
-            title="Video Call"
-            aria-label="Video Call"
-            onClick={() => onStartCall(true)}
-          >
-            <Video size={19} />
-          </button>
-
           {/* In-chat search toggle */}
           <button
             className={`icon-button ${inChatSearch ? "active" : ""}`}
@@ -321,7 +252,6 @@ export default function ChatWindow({
                   onDelete={onDelete}
                   onForward={onForward}
                   onPin={onPin}
-                  onReact={onReact}
                   onImageClick={(url, name) => setActiveMedia({ url, name })}
                   isHighlighted={Boolean(isMatch)}
                 />
@@ -342,7 +272,6 @@ export default function ChatWindow({
       <MessageInput
         onSend={onSend}
         onTyping={onTyping}
-        onError={onError}
         replyTo={replyTo}
         onCancelReply={onCancelReply}
         editText={editText}
@@ -350,7 +279,7 @@ export default function ChatWindow({
       />
 
       <div className="security-note">
-        <ShieldCheck size={12} /> End-to-end encrypted · Messages stay yours
+        <ShieldCheck size={12} /> Secure connection · Messages are stored on the chat server
       </div>
 
       {/* Image Lightbox modal */}

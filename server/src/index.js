@@ -37,7 +37,7 @@ app.set("trust proxy", 1);
 app.use(helmet());
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json({ limit: "32kb" }));
-app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 5 }), authRouter);
+app.use("/api/auth", authRouter);
 app.use("/api/contacts", rateLimit({ windowMs: 15 * 60 * 1000, limit: 30 }), contactRouter);
 app.use("/api/chats", chatRouter);
 app.get("/api/health", async (_req, res, next) => {

@@ -1,10 +1,13 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { createHash, randomBytes, randomInt, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { prisma } from "../db.js";
 import { createToken, requireAuth } from "../auth.js";
 
 export const authRouter = Router();
+const authRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5 });
+const profileRateLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30 });
 
 const scrypt = promisify(scryptCallback);
 
@@ -65,7 +68,7 @@ async function sendSms(phone, code) {
   return { configured: true, sent: true };
 }
 
-authRouter.post("/request-otp", async (req, res, next) => {
+authRouter.post("/request-otp", authRateLimit, async (req, res, next) => {
   try {
     const phone = normalizePhone(req.body?.phone ?? req.body?.identifier);
     if (!phone) return res.status(400).json({ error: "Enter a valid phone number in international format, such as +919876543210." });
@@ -102,7 +105,7 @@ authRouter.post("/request-otp", async (req, res, next) => {
   }
 });
 
-authRouter.post("/verify-otp", async (req, res, next) => {
+authRouter.post("/verify-otp", authRateLimit, async (req, res, next) => {
   try {
     const phone = normalizePhone(req.body?.phone ?? req.body?.identifier);
     const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
@@ -158,7 +161,7 @@ authRouter.post("/verify-otp", async (req, res, next) => {
   }
 });
 
-authRouter.post("/signup", async (req, res, next) => {
+authRouter.post("/signup", authRateLimit, async (req, res, next) => {
   try {
     const username = normalizeUsername(req.body?.username);
     const password = typeof req.body?.password === "string" ? req.body.password : "";
@@ -195,7 +198,7 @@ authRouter.post("/signup", async (req, res, next) => {
   }
 });
 
-authRouter.post("/login", async (req, res, next) => {
+authRouter.post("/login", authRateLimit, async (req, res, next) => {
   try {
     const legacyPhoneLogin = typeof req.body?.phone === "string" &&
       typeof req.body?.identifier !== "string" && typeof req.body?.username !== "string";
@@ -245,7 +248,7 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
   }
 });
 
-authRouter.patch("/me", requireAuth, async (req, res, next) => {
+authRouter.patch("/me", requireAuth, profileRateLimit, async (req, res, next) => {
   try {
     const data = {};
     if (req.body?.discoverableByPhone === true) {
@@ -265,13 +268,20 @@ authRouter.patch("/me", requireAuth, async (req, res, next) => {
     if (typeof req.body?.avatarUrl === "string") {
       const avatarUrl = req.body.avatarUrl.trim();
       if (avatarUrl) {
-        if (avatarUrl.length > 2048) return res.status(400).json({ error: "Avatar URL must be 2048 characters or fewer." });
-        try {
-          const parsed = new URL(avatarUrl);
-          if (parsed.protocol !== "https:") throw new Error("Avatar URL must use HTTPS.");
-          data.avatarUrl = parsed.toString().slice(0, 2048);
-        } catch {
-          return res.status(400).json({ error: "Enter a valid HTTPS avatar URL." });
+        if (avatarUrl.startsWith("data:")) {
+          if (avatarUrl.length > 24_000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatarUrl)) {
+            return res.status(400).json({ error: "Avatar image must be a compressed JPEG under 24,000 characters." });
+          }
+          data.avatarUrl = avatarUrl;
+        } else {
+          if (avatarUrl.length > 2048) return res.status(400).json({ error: "Avatar URL must be 2048 characters or fewer." });
+          try {
+            const parsed = new URL(avatarUrl);
+            if (parsed.protocol !== "https:") throw new Error("Avatar URL must use HTTPS.");
+            data.avatarUrl = parsed.toString().slice(0, 2048);
+          } catch {
+            return res.status(400).json({ error: "Enter a valid HTTPS avatar URL." });
+          }
         }
       } else {
         data.avatarUrl = null;

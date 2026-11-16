@@ -1,7 +1,47 @@
 import { useRef, useState } from "react";
-import { Camera, Check, Copy, Globe, Lock, Phone, QrCode, Shield, Sparkles, User, X } from "lucide-react";
+import { Camera, Check, LogOut, Phone, X } from "lucide-react";
 import Avatar from "./Avatar.jsx";
-import { statusPresets } from "../data.js";
+
+const MAX_AVATAR_LENGTH = 24_000;
+
+function compressAvatar(file) {
+  return new Promise((resolve, reject) => {
+    const sourceUrl = URL.createObjectURL(file);
+    const image = new window.Image();
+    image.onload = () => {
+      try {
+        const longestSide = Math.min(256, Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("This device cannot process the selected photo.");
+
+        for (let side = longestSide; side >= 64; side = Math.floor(side * 0.75)) {
+          const scale = side / Math.max(image.naturalWidth, image.naturalHeight);
+          canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+          canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          for (const quality of [0.8, 0.65, 0.5]) {
+            const compressed = canvas.toDataURL("image/jpeg", quality);
+            if (compressed.length <= MAX_AVATAR_LENGTH) {
+              resolve(compressed);
+              return;
+            }
+          }
+        }
+        reject(new Error("This photo could not be compressed enough. Choose a smaller image."));
+      } catch (error) {
+        reject(error);
+      } finally {
+        URL.revokeObjectURL(sourceUrl);
+      }
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(sourceUrl);
+      reject(new Error("The selected photo could not be opened."));
+    };
+    image.src = sourceUrl;
+  });
+}
 
 export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut }) {
   const [formData, setFormData] = useState({
@@ -9,67 +49,52 @@ export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut })
     username: user?.username || "",
     phone: user?.phone || "",
     bio: user?.bio || "",
-    status: user?.status || "Using Blinker-a",
-    statusEmoji: user?.statusEmoji || "✨",
     avatarUrl: user?.avatarUrl || "",
-    coverUrl: user?.coverUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
-    discoverableByPhone: user?.discoverableByPhone ?? false,
-    lastSeenPrivacy: user?.lastSeenPrivacy || "everyone",
-    readReceipts: user?.readReceipts ?? true
+    discoverableByPhone: user?.discoverableByPhone ?? false
   });
 
-  const [activeTab, setActiveTab] = useState("profile"); // "profile" | "status" | "qr"
-  const [copied, setCopied] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [processingAvatar, setProcessingAvatar] = useState(false);
 
   const avatarInputRef = useRef(null);
-  const coverInputRef = useRef(null);
 
-  const handleAvatarFile = (e) => {
+  const handleAvatarFile = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setFormData((prev) => ({ ...prev, avatarUrl: reader.result }));
-      };
-      reader.readAsDataURL(file);
+    e.currentTarget.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+      setAvatarError("Choose an image smaller than 10 MB.");
+      return;
     }
-  };
-
-  const handleCoverFile = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setFormData((prev) => ({ ...prev, coverUrl: reader.result }));
-      };
-      reader.readAsDataURL(file);
+    setAvatarError("");
+    setProcessingAvatar(true);
+    try {
+      const avatarUrl = await compressAvatar(file);
+      setFormData((previous) => ({ ...previous, avatarUrl }));
+    } catch (error) {
+      setAvatarError(error.message);
+    } finally {
+      setProcessingAvatar(false);
     }
-  };
-
-  const handleSelectStatus = (preset) => {
-    setFormData((prev) => ({
-      ...prev,
-      status: preset.text,
-      statusEmoji: preset.emoji
-    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    const saved = await onUpdateUser(formData);
-    setSaving(false);
-    if (!saved) return;
-    setSavedNotice(true);
-    setTimeout(() => setSavedNotice(false), 2500);
-  };
-
-  const copyProfileLink = () => {
-    navigator.clipboard?.writeText(`https://blinker.app/u/${formData.username || "me"}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setSaveError("");
+    try {
+      const saved = await onUpdateUser(formData);
+      if (!saved) return;
+      setSavedNotice(true);
+      setTimeout(() => setSavedNotice(false), 2500);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Profile could not be saved.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -85,51 +110,11 @@ export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut })
             <button className="icon-button" onClick={onClose}><X size={18} /></button>
           </div>
 
-          <div className="profile-tabs">
-            <button 
-              className={activeTab === "profile" ? "active" : ""} 
-              onClick={() => setActiveTab("profile")}
-            >
-              <User size={15} /> Edit Profile
-            </button>
-            <button 
-              className={activeTab === "status" ? "active" : ""} 
-              onClick={() => setActiveTab("status")}
-            >
-              <Sparkles size={15} /> Status / About
-            </button>
-            <button 
-              className={activeTab === "qr" ? "active" : ""} 
-              onClick={() => setActiveTab("qr")}
-            >
-              <QrCode size={15} /> Share QR
-            </button>
-          </div>
         </div>
 
-        {activeTab === "profile" && (
-          <form onSubmit={handleSubmit} className="profile-edit-body">
+        <form onSubmit={handleSubmit} className="profile-edit-body">
             {/* Header banner with cover image */}
-            <div 
-              className="profile-cover"
-              style={{ backgroundImage: `url(${formData.coverUrl})` }}
-            >
-              <input 
-                type="file" 
-                ref={coverInputRef} 
-                accept="image/*" 
-                onChange={handleCoverFile} 
-                style={{ display: "none" }} 
-              />
-              <button 
-                type="button" 
-                className="cover-edit-btn"
-                onClick={() => coverInputRef.current?.click()}
-                title="Change cover photo"
-              >
-                <Camera size={14} /> Change Cover
-              </button>
-
+            <div className="profile-cover">
               {/* Avatar circle overlapping the cover */}
               <div className="profile-avatar-wrapper">
                 <input 
@@ -152,6 +137,8 @@ export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut })
                 </div>
               </div>
             </div>
+            {avatarError && <p className="profile-image-error" role="alert">{avatarError}</p>}
+            {saveError && <p className="profile-image-error" role="alert">{saveError}</p>}
 
             <div className="profile-fields">
               <div className="field-group">
@@ -206,14 +193,6 @@ export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut })
                     onChange={(e) => setFormData({ ...formData, discoverableByPhone: e.target.checked })} 
                   />
                 </label>
-                <label className="setting-row">
-                  <span>Send Read Receipts (Blue double ticks)</span>
-                  <input 
-                    type="checkbox" 
-                    checked={formData.readReceipts} 
-                    onChange={(e) => setFormData({ ...formData, readReceipts: e.target.checked })} 
-                  />
-                </label>
               </div>
             </div>
 
@@ -221,133 +200,15 @@ export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut })
               {savedNotice ? (
                 <span className="saved-badge"><Check size={14} /> Profile Saved Successfully!</span>
               ) : (
-                <button type="button" className="text-button danger" onClick={onSignOut}>Sign Out</button>
+                <button type="button" className="text-button danger" onClick={onSignOut}>
+                  <LogOut size={15} /> Sign Out
+                </button>
               )}
-              <button type="submit" className="primary-button" disabled={saving}>
-                {saving ? "Saving..." : "Save Changes"}
+              <button type="submit" className="primary-button" disabled={saving || processingAvatar}>
+                {processingAvatar ? "Preparing photo..." : saving ? "Saving..." : <><Check size={16} /> Save Changes</>}
               </button>
             </div>
-          </form>
-        )}
-
-        {activeTab === "status" && (
-          <div className="profile-status-body">
-            <div className="current-status-banner">
-              <span className="status-large-emoji">{formData.statusEmoji || "✨"}</span>
-              <div className="status-banner-text">
-                <span className="eyebrow">CURRENT ABOUT STATUS</span>
-                <strong>{formData.status}</strong>
-              </div>
-            </div>
-
-            <div className="custom-status-input-wrap">
-              <label>Custom Status</label>
-              <div className="custom-status-row">
-                <input 
-                  type="text" 
-                  className="emoji-input"
-                  value={formData.statusEmoji} 
-                  onChange={(e) => setFormData({ ...formData, statusEmoji: e.target.value.slice(0, 2) })} 
-                  placeholder="✨" 
-                />
-                <input 
-                  type="text" 
-                  className="text-input"
-                  value={formData.status} 
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })} 
-                  placeholder="Set a custom status message..." 
-                />
-              </div>
-            </div>
-
-            <div className="section-label">CHOOSE PRESET STATUS (WHATSAPP & TELEGRAM)</div>
-            <div className="status-presets-grid">
-              {statusPresets.map((preset, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  className={`status-chip ${formData.status === preset.text ? "active" : ""}`}
-                  onClick={() => handleSelectStatus(preset)}
-                >
-                  <span className="chip-emoji">{preset.emoji}</span>
-                  <span className="chip-text">{preset.text}</span>
-                  {formData.status === preset.text && <Check size={14} className="chip-check" />}
-                </button>
-              ))}
-            </div>
-
-            <div className="modal-footer">
-              <button 
-                type="button" 
-                className="primary-button" 
-                onClick={() => {
-                  onUpdateUser(formData);
-                  setSavedNotice(true);
-                  setTimeout(() => setSavedNotice(false), 2000);
-                }}
-              >
-                {savedNotice ? "Status Updated!" : "Update Status"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "qr" && (
-          <div className="profile-qr-body">
-            <div className="qr-card">
-              <div className="qr-avatar-badge">
-                <Avatar name={formData.name} photo={formData.avatarUrl} color="#9088e8" />
-              </div>
-              <h3>{formData.name}</h3>
-              <p>@{formData.username}</p>
-
-              {/* Styled Telegram/WhatsApp QR visual */}
-              <div className="qr-code-box">
-                <svg viewBox="0 0 100 100" width="160" height="160" className="qr-svg">
-                  {/* Outer corner squares */}
-                  <rect x="5" y="5" width="28" height="28" rx="6" fill="#84a9ff" />
-                  <rect x="9" y="9" width="20" height="20" rx="4" fill="#0d1118" />
-                  <rect x="13" y="13" width="12" height="12" rx="2" fill="#84a9ff" />
-
-                  <rect x="67" y="5" width="28" height="28" rx="6" fill="#84a9ff" />
-                  <rect x="71" y="9" width="20" height="20" rx="4" fill="#0d1118" />
-                  <rect x="75" y="13" width="12" height="12" rx="2" fill="#84a9ff" />
-
-                  <rect x="5" y="67" width="28" height="28" rx="6" fill="#84a9ff" />
-                  <rect x="9" y="71" width="20" height="20" rx="4" fill="#0d1118" />
-                  <rect x="13" y="75" width="12" height="12" rx="2" fill="#84a9ff" />
-
-                  {/* QR Pattern dots */}
-                  <circle cx="45" cy="18" r="3" fill="#84a9ff" />
-                  <circle cx="55" cy="22" r="3" fill="#84a9ff" />
-                  <circle cx="48" cy="35" r="3" fill="#84a9ff" />
-                  <circle cx="20" cy="48" r="3" fill="#84a9ff" />
-                  <circle cx="35" cy="52" r="3" fill="#84a9ff" />
-                  <circle cx="50" cy="50" r="5" fill="#65d4a7" />
-                  <circle cx="65" cy="48" r="3" fill="#84a9ff" />
-                  <circle cx="80" cy="52" r="3" fill="#84a9ff" />
-                  <circle cx="45" cy="65" r="3" fill="#84a9ff" />
-                  <circle cx="60" cy="72" r="3" fill="#84a9ff" />
-                  <circle cx="75" cy="68" r="3" fill="#84a9ff" />
-                  <circle cx="52" cy="82" r="3" fill="#84a9ff" />
-                  <circle cx="82" cy="85" r="3" fill="#84a9ff" />
-                </svg>
-                <div className="qr-center-logo">
-                  <span>b.</span>
-                </div>
-              </div>
-
-              <p className="qr-caption">Scan this QR code with any camera to start chatting on Blinker-a.</p>
-
-              <div className="qr-actions">
-                <button type="button" className="primary-button" onClick={copyProfileLink}>
-                  {copied ? <Check size={16} /> : <Copy size={16} />}
-                  <span>{copied ? "Link Copied!" : "Copy Profile Link"}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        </form>
       </div>
     </div>
   );

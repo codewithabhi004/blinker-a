@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ContactRound, MessageSquare, Phone, Search, UserPlus, X } from "lucide-react";
+import { ContactRound, MessageSquare, Search, UserPlus, X } from "lucide-react";
 import Avatar from "./Avatar.jsx";
 import "./ContactsModal.css";
 
@@ -9,7 +9,6 @@ export default function ContactsModal({
   onSearchUsername,
   onAddContact,
   onImportDeviceContacts,
-  onStartCall,
   onClose
 }) {
   const [query, setQuery] = useState("");
@@ -178,8 +177,8 @@ export default function ContactsModal({
               />
             </div>
             <button type="submit" className="primary-button">
-              <MessageSquare size={15} />
-              Save & Start Chat
+              <UserPlus size={15} />
+              Save contact
             </button>
           </form>
         ) : (
@@ -217,14 +216,6 @@ export default function ContactsModal({
                 {contact.status && <span className="contact-status-text">"{contact.status}"</span>}
               </div>
               <div className="contact-actions">
-                <button
-                  type="button"
-                  className="icon-button"
-                  title="Voice Call"
-                  onClick={() => onStartCall(contact, false)}
-                >
-                  <Phone size={16} />
-                </button>
                 <button
                   type="button"
                   className="contact-chat-btn"

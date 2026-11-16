@@ -2,12 +2,17 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Image, Plus, Send, X } from "lucide-react";
 import Avatar from "./Avatar.jsx";
 
-export default function StatusViewer({ stories, currentStoryIndex, onClose, onAddStory, onReplyStory }) {
+export default function StatusViewer({
+  stories,
+  currentStoryIndex,
+  user,
+  onClose,
+  onAddStory
+}) {
   const [index, setIndex] = useState(currentStoryIndex || 0);
   const [progress, setProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [replyText, setReplyText] = useState("");
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(currentStoryIndex < 0);
   const [newCaption, setNewCaption] = useState("");
   const [newImage, setNewImage] = useState("");
 
@@ -52,13 +57,6 @@ export default function StatusViewer({ stories, currentStoryIndex, onClose, onAd
     }
   };
 
-  const handleSendReply = (e) => {
-    e.preventDefault();
-    if (!replyText.trim()) return;
-    onReplyStory(current, replyText.trim());
-    setReplyText("");
-  };
-
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -73,8 +71,9 @@ export default function StatusViewer({ stories, currentStoryIndex, onClose, onAd
     if (!newImage) return;
     onAddStory({
       id: "story-" + Date.now(),
-      userName: "Alex Morgan (You)",
-      userAvatar: null,
+      userId: user?.id,
+      userName: user?.name || "You",
+      userAvatar: user?.avatarUrl || null,
       color: "#9088e8",
       timestamp: "Just now",
       seen: false,
@@ -82,6 +81,7 @@ export default function StatusViewer({ stories, currentStoryIndex, onClose, onAd
       caption: newCaption || "My status update ✨"
     });
     setShowAddModal(false);
+    setIndex(0);
     setNewImage("");
     setNewCaption("");
   };
@@ -106,16 +106,18 @@ export default function StatusViewer({ stories, currentStoryIndex, onClose, onAd
                 </label>
               )}
             </div>
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Add a caption..." 
               value={newCaption} 
               onChange={(e) => setNewCaption(e.target.value)}
               className="status-caption-input"
             />
             <button type="submit" className="primary-button" disabled={!newImage}>
-              Share Status (24 hours)
+              <Send size={16} />
+              Save to My Status
             </button>
+            <small className="status-local-note">Status sharing is not available yet. This stays on this device.</small>
           </form>
         </div>
       ) : (
@@ -182,18 +184,6 @@ export default function StatusViewer({ stories, currentStoryIndex, onClose, onAd
             </div>
           )}
 
-          {/* Reply input */}
-          <form className="status-reply-bar" onSubmit={handleSendReply}>
-            <input 
-              type="text" 
-              placeholder={`Reply to ${current?.userName?.split(" ")[0]}...`}
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-            />
-            <button type="submit" disabled={!replyText.trim()}>
-              <Send size={16} />
-            </button>
-          </form>
         </div>
       )}
     </div>

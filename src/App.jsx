@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Bell, Check, ChevronRight, ContactRound, Image, Moon, Phone, Search, Shield, Sun, Users, X
+  Check, ChevronRight, ContactRound, Image, Moon, Search, Shield, Sun, Users, X
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { Capacitor } from "@capacitor/core";
@@ -10,7 +10,6 @@ import { API_BASE, apiRequest } from "./api.js";
 import Avatar from "./components/Avatar.jsx";
 import ChatSidebar from "./components/ChatSidebar.jsx";
 import ChatWindow from "./components/ChatWindow.jsx";
-import CallModal from "./components/CallModal.jsx";
 import StatusViewer from "./components/StatusViewer.jsx";
 import ProfileModal from "./components/ProfileModal.jsx";
 import WallpaperModal from "./components/WallpaperModal.jsx";
@@ -23,7 +22,6 @@ import {
 
 const emptySettings = {
   theme: "dark",
-  notifications: true,
   discoverable: false,
   countryCode: "+91"
 };
@@ -38,7 +36,6 @@ const defaultWallpaperConfig = {
   blur: 0
 };
 
-const nowLabel = () => new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date());
 const formatMessageTime = (value) => new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 function loadStored(key, fallback) {
@@ -113,11 +110,9 @@ export default function App() {
   // Modals
   const [showProfile, setShowProfile] = useState(false);
   const [showWallpaper, setShowWallpaper] = useState(false);
-  const [showCall, setShowCall] = useState(false);
-  const [callContact, setCallContact] = useState(null);
-  const [isVideoCall, setIsVideoCall] = useState(false);
   const [showStories, setShowStories] = useState(false);
   const [storyIndex, setStoryIndex] = useState(0);
+  const [storyFeed, setStoryFeed] = useState("others");
   const [showSettings, setShowSettings] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
@@ -137,6 +132,8 @@ export default function App() {
   activeChatRef.current = activeId;
 
   const chat = useMemo(() => chats.find((item) => item.id === activeId), [chats, activeId]);
+  const myStories = stories.filter((story) => story.userId === user?.id);
+  const otherStories = stories.filter((story) => story.userId !== user?.id);
 
   // Persist state to localStorage
   useEffect(() => {
@@ -407,7 +404,7 @@ export default function App() {
     }
   }
 
-  function sendMessage({ text, file, kind }) {
+  function sendMessage({ text }) {
     if (!chat) return;
 
     if (editingId) {
@@ -427,10 +424,6 @@ export default function App() {
       return;
     }
 
-    if (file || kind !== "text") {
-      setToast("Text messages are live. Media upload is not configured yet.");
-      return;
-    }
     if (!socket?.connected) {
       setToast("Live chat is disconnected. Your message was not sent.");
       return;
@@ -510,44 +503,21 @@ export default function App() {
     });
   }
 
-  function handleReact() {
-    setToast("Message reactions are not available yet.");
-  }
-
-  function handleStartCall(targetContact, isVideo = false) {
-    setToast("Voice and video calling are not connected yet.");
-  }
-
   function handleOpenStory(index) {
+    setStoryFeed("others");
     setStoryIndex(index);
     setShowStories(true);
   }
 
-  function handleAddStory(newStory) {
-    setStories([newStory, ...stories]);
-    setToast("Your status update is live for 24 hours!");
+  function handleOpenMyStatus() {
+    setStoryFeed("mine");
+    setStoryIndex(myStories.length ? 0 : -1);
+    setShowStories(true);
   }
 
-  function handleReplyStory(story, text) {
-    const targetChat = chats.find((c) => c.id === story.userId) || chats[0];
-    if (targetChat) {
-      updateChat(targetChat.id, (c) => ({
-        ...c,
-        messages: [
-          ...c.messages,
-          {
-            id: `story-reply-${Date.now()}`,
-            from: "me",
-            reply: `Replying to status: "${story.caption}"`,
-            text,
-            time: nowLabel(),
-            read: true
-          }
-        ]
-      }));
-      setToast(`Reply sent to ${story.userName}!`);
-    }
-    setShowStories(false);
+  function handleAddStory(newStory) {
+    setStories((items) => [newStory, ...items]);
+    setToast("Status saved to My Status on this device only.");
   }
 
   async function createGroup() {
@@ -618,6 +588,9 @@ export default function App() {
     setUser(null);
     setChats([]);
     setContacts([]);
+    setStories([]);
+    setShowStories(false);
+    setStoryFeed("others");
     setActiveId(null);
     setShowProfile(false);
     setToast("");
@@ -651,29 +624,27 @@ export default function App() {
         filter={filter}
         onFilter={setFilter}
         onNewChat={createGroup}
-        onContacts={() => setShowContacts(true)}
         onSettings={() => setShowSettings(true)}
         onProfile={() => setShowProfile(true)}
         user={user}
-        stories={stories}
+        stories={otherStories}
+        hasMyStatus={myStories.length > 0}
         onOpenStory={handleOpenStory}
-        onOpenStatusCreator={() => {
-          setStoryIndex(0);
-          setShowStories(true);
-        }}
+        onOpenStatusCreator={handleOpenMyStatus}
         mobileTab={mobileTab}
         onSetMobileTab={(tab) => {
           setMobileTab(tab);
-          if (tab === "calls") handleStartCall(chat, false);
-          if (tab === "status") handleOpenStory(0);
+          if (tab === "status") {
+            if (otherStories.length) handleOpenStory(0);
+            else handleOpenMyStatus();
+          }
           if (tab === "profile") setShowProfile(true);
           if (tab === "settings") setShowSettings(true);
         }}
-        onStartCall={() => handleStartCall(chat, false)}
         onOpenInstall={!Capacitor.isNativePlatform() ? () => setShowInstall(true) : undefined}
       />
 
-      {/* Main Conversation Window with custom wallpaper, in-chat search, voice notes and reactions */}
+      {/* Main conversation with wallpaper, search, and text messaging */}
       <ChatWindow
         chat={chat}
         onBack={() => setMobileOpen(false)}
@@ -690,11 +661,8 @@ export default function App() {
         typing={typing}
         editText={editDraft}
         onCancelEdit={() => { setEditingId(null); setEditDraft(null); }}
-        onError={setToast}
-        onStartCall={(isVideo) => handleStartCall(chat, isVideo)}
         onOpenWallpaper={() => setShowWallpaper(true)}
         wallpaperConfig={wallpaperConfig}
-        onReact={handleReact}
       />
 
       {/* Chat Details Side Panel */}
@@ -717,22 +685,9 @@ export default function App() {
             <div className="details-section">
               <div className="section-label">ACTIONS</div>
               <div className="details-action-buttons">
-                <button type="button" className="action-pill" onClick={() => handleStartCall(chat, false)}>
-                  <Phone size={15} /> Voice Call
-                </button>
                 <button type="button" className="action-pill" onClick={() => setShowWallpaper(true)}>
-                  Wallpaper
+                  <Image size={15} /> Wallpaper
                 </button>
-              </div>
-            </div>
-
-            <div className="details-section">
-              <div className="section-label">SHARED MEDIA</div>
-              <div className="shared-media">
-                <span>🪔</span>
-                <span>☕</span>
-                <span>🏏</span>
-                <span>🏖️</span>
               </div>
             </div>
 
@@ -771,7 +726,6 @@ export default function App() {
           onSearchUsername={searchUsername}
           onAddContact={handleAddContact}
           onImportDeviceContacts={importPhoneContacts}
-          onStartCall={(contact, isVideo) => handleStartCall(contact, isVideo)}
           onClose={() => setShowContacts(false)}
         />
       )}
@@ -795,23 +749,14 @@ export default function App() {
         />
       )}
 
-      {/* Simulated Audio/Video Calling Screen */}
-      {showCall && callContact && (
-        <CallModal
-          contact={callContact}
-          isVideo={isVideoCall}
-          onClose={() => setShowCall(false)}
-        />
-      )}
-
       {/* WhatsApp Status / Telegram Stories Viewer */}
       {showStories && (
         <StatusViewer
-          stories={stories}
+          stories={storyFeed === "mine" ? myStories : otherStories}
           currentStoryIndex={storyIndex}
+          user={user}
           onClose={() => setShowStories(false)}
           onAddStory={handleAddStory}
-          onReplyStory={handleReplyStory}
         />
       )}
 
@@ -870,14 +815,6 @@ export default function App() {
 
             <div className="settings-block">
               <h3>Privacy & Security</h3>
-              <label className="setting-row">
-                <span><Bell size={16} /> Push Notifications</span>
-                <input
-                  type="checkbox"
-                  checked={settings.notifications}
-                  onChange={(e) => setSettings((v) => ({ ...v, notifications: e.target.checked }))}
-                />
-              </label>
               <label className="setting-row">
                 <span><Users size={16} /> Let contacts find me by phone (+91)</span>
                 <input

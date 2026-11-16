@@ -1,14 +1,14 @@
 import { motion } from "framer-motion";
 import {
-  Archive, BellOff, Check, CheckCheck, CircleHelp, ContactRound, Download, Github, MessageCircle,
-  MoreHorizontal, Phone, Plus, Radio, Search, Settings2, Sparkles, User, Users, X
+  Archive, BellOff, Check, CheckCheck, CircleHelp, Download, Github, MessageCircle,
+  MoreHorizontal, Plus, Radio, Search, Settings2, Sparkles, User, Users, X
 } from "lucide-react";
 import Avatar from "./Avatar.jsx";
 
 export default function ChatSidebar({
   chats, activeId, onSelect, query, onQuery, filter, onFilter, onNewChat,
-  onContacts, onSettings, onProfile, user, stories, onOpenStory, onOpenStatusCreator,
-  mobileTab, onSetMobileTab, onStartCall, onOpenInstall
+  onSettings, onProfile, user, stories, hasMyStatus, onOpenStory, onOpenStatusCreator,
+  mobileTab, onSetMobileTab, onOpenInstall
 }) {
   // Telegram-style folder filtering
   const filtered = chats.filter((chat) => {
@@ -90,7 +90,7 @@ export default function ChatSidebar({
         <div className="stories-tray">
           {/* User's Own Status button */}
           <div className="story-item my-story" onClick={onOpenStatusCreator}>
-            <div className="story-ring has-add">
+            <div className={`story-ring has-add${hasMyStatus ? " has-status" : ""}`}>
               <Avatar name={user?.name || "You"} photo={user?.avatarUrl} color="#9088e8" small />
               <span className="add-story-badge"><Plus size={11} strokeWidth={3} /></span>
             </div>
@@ -238,7 +238,7 @@ export default function ChatSidebar({
           />
           <span className="profile-copy">
             <strong>{user?.name || "Alex Morgan"}</strong>
-            <small>{user?.statusEmoji || "✨"} {user?.status || "Hey there! I am using Blinker-a"}</small>
+            <small>{user?.bio || "Hey there! I am using Blinker-a"}</small>
           </span>
           <MoreHorizontal size={18} className="profile-arrow" />
         </button>
@@ -260,24 +260,10 @@ export default function ChatSidebar({
 
         <button
           className={`nav-tab ${mobileTab === "status" ? "active" : ""}`}
-          onClick={() => {
-            onSetMobileTab("status");
-            onOpenStory(0);
-          }}
+          onClick={() => onSetMobileTab("status")}
         >
           <Sparkles size={20} />
           <span>Updates</span>
-        </button>
-
-        <button
-          className={`nav-tab ${mobileTab === "calls" ? "active" : ""}`}
-          onClick={() => {
-            onSetMobileTab("calls");
-            onStartCall(false);
-          }}
-        >
-          <Phone size={20} />
-          <span>Calls</span>
         </button>
 
         <button

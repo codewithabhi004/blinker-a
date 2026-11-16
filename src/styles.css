@@ -227,6 +227,9 @@ kbd {
 .story-ring.has-add {
   background: var(--line-bright);
 }
+.story-ring.has-add.has-status {
+  background: linear-gradient(135deg, #f59e0b, #ec4899, #8b5cf6);
+}
 .story-ring .avatar {
   width: 100%;
   height: 100%;
@@ -1277,6 +1280,11 @@ kbd {
   overflow-y: auto;
   flex: 1;
 }
+.profile-image-error {
+  margin: 0 24px;
+  color: #ff7777;
+  font-size: 12px;
+}
 .profile-cover {
   position: relative;
   height: 140px;
@@ -1852,37 +1860,6 @@ kbd {
   font-size: 12px;
   backdrop-filter: blur(8px);
 }
-.status-reply-bar {
-  position: absolute;
-  bottom: 12px;
-  left: 14px;
-  right: 14px;
-  z-index: 10;
-  display: flex;
-  gap: 8px;
-}
-.status-reply-bar input {
-  flex: 1;
-  height: 42px;
-  padding: 0 16px;
-  border: 1px solid rgba(255, 255, 255, .3);
-  border-radius: 21px;
-  background: rgba(0, 0, 0, .6);
-  color: #fff;
-  font-size: 12px;
-  outline: none;
-  backdrop-filter: blur(8px);
-}
-.status-reply-bar button {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--blue);
-  color: #fff;
-}
-
 /* Add Status Modal */
 .status-add-card {
   width: min(420px, 92vw);
@@ -1930,6 +1907,13 @@ kbd {
   color: var(--ink);
   font-size: 12px;
   margin-bottom: 12px;
+}
+.status-local-note {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
 }
 
 /* ========================================================
