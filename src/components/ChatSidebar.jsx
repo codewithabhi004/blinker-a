@@ -41,11 +41,14 @@ export default function ChatSidebar({
           </div>
 
           <div className="brand-actions">
-            <button className="icon-button install-app-btn" onClick={onOpenInstall} title="Download / Install App" aria-label="Install app">
+            <button className="icon-button install-app-btn" onClick={onOpenInstall} title="Download Android APK" aria-label="Download Android app">
               <Download size={18} />
             </button>
             <button className="icon-button" onClick={onNewChat} title="Create Group or Channel" aria-label="New chat">
               <Plus size={19} />
+            </button>
+            <button className="icon-button" onClick={onSettings} title="Settings" aria-label="Settings">
+              <Settings2 size={18} />
             </button>
             <button className="icon-button" onClick={onProfile} title="My Profile" aria-label="Profile">
               <User size={18} />
@@ -58,7 +61,7 @@ export default function ChatSidebar({
           <span className="banner-flag">🇮🇳</span>
           <div className="banner-copy">
             <strong>Blinker-a for Android</strong>
-            <small>Install app on your phone</small>
+            <small>Download the Android APK</small>
           </div>
           <span className="banner-install-tag">Install 📱</span>
         </div>
@@ -279,6 +282,16 @@ export default function ChatSidebar({
         >
           <User size={20} />
           <span>Profile</span>
+        </button>
+        <button
+          className={`nav-tab ${mobileTab === "settings" ? "active" : ""}`}
+          onClick={() => {
+            onSetMobileTab("settings");
+            onSettings();
+          }}
+        >
+          <Settings2 size={20} />
+          <span>Settings</span>
         </button>
       </nav>
     </aside>

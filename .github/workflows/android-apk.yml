@@ -3,10 +3,10 @@ name: Build Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    tags: ["v*"]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   android:
@@ -36,7 +36,14 @@ jobs:
         run: npm ci
 
       - name: Build web app
-        run: npm run build
+        run: |
+          if [ -z "$VITE_API_URL" ]; then
+            echo "::error::Set the VITE_API_URL repository variable to the deployed API URL before building a live Android APK."
+            exit 1
+          fi
+          npm run build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
       - name: Sync Capacitor Android
         run: npx cap sync android
@@ -52,3 +59,13 @@ jobs:
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish APK release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk blinker-a.apk
+          gh release create "$GITHUB_REF_NAME" blinker-a.apk \
+            --title "Blinker-a $GITHUB_REF_NAME" \
+            --notes "Android APK for sideload testing. This is a debug-signed build, not a Google Play release."
+        env:
+          GH_TOKEN: ${{ github.token }}

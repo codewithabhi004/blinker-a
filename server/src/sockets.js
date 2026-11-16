@@ -213,30 +213,31 @@ export function attachChatSockets(io) {
           include: { sender: { select: { id: true, name: true, avatarUrl: true } } }
         });
 
-        socket.on("message:pin", async ({ chatId, messageId } = {}, acknowledge = () => {}) => {
-          try {
-            const [actor, chat, message] = await Promise.all([
-              prisma.chatMember.findUnique({ where: { chatId_userId: { chatId, userId: socket.userId } } }),
-              prisma.chat.findUnique({ where: { id: chatId }, include: { group: true } }),
-              prisma.message.findUnique({ where: { id: messageId } })
-            ]);
-            if (!actor || !chat || !message || message.chatId !== chatId || message.deletedAt ||
-                (chat.type !== "PRIVATE" && !["OWNER", "ADMIN"].includes(actor.role) && !chat.group?.membersCanPin)) {
-              return acknowledge({ error: "You do not have permission to pin that message." });
-            }
-            await prisma.chat.update({ where: { id: chatId }, data: { pinnedMessageId: messageId } });
-            io.to(roomForChat(chatId)).emit("chat:pinned", { chatId, message });
-            return acknowledge({ ok: true });
-          } catch (error) {
-            console.error("message:pin failed", error);
-            return acknowledge({ error: "Message could not be pinned." });
-          }
-        });
         io.to(roomForChat(chatId)).emit("message:new", forwarded);
         return acknowledge({ ok: true, message: forwarded });
       } catch (error) {
         console.error("message:forward failed", error);
         return acknowledge({ error: "Message could not be forwarded." });
+      }
+    });
+
+    socket.on("message:pin", async ({ chatId, messageId } = {}, acknowledge = () => {}) => {
+      try {
+        const [actor, chat, message] = await Promise.all([
+          prisma.chatMember.findUnique({ where: { chatId_userId: { chatId, userId: socket.userId } } }),
+          prisma.chat.findUnique({ where: { id: chatId }, include: { group: true } }),
+          prisma.message.findUnique({ where: { id: messageId } })
+        ]);
+        if (!actor || !chat || !message || message.chatId !== chatId || message.deletedAt ||
+            (chat.type !== "PRIVATE" && !["OWNER", "ADMIN"].includes(actor.role) && !chat.group?.membersCanPin)) {
+          return acknowledge({ error: "You do not have permission to pin that message." });
+        }
+        await prisma.chat.update({ where: { id: chatId }, data: { pinnedMessageId: messageId } });
+        io.to(roomForChat(chatId)).emit("chat:pinned", { chatId, message });
+        return acknowledge({ ok: true });
+      } catch (error) {
+        console.error("message:pin failed", error);
+        return acknowledge({ error: "Message could not be pinned." });
       }
     });
 

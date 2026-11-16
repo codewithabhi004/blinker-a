@@ -32,9 +32,10 @@ contactRouter.post("/match", requireAuth, async (req, res, next) => {
       where: {
         phone: { in: phoneNumbers },
         discoverableByPhone: true,
+        phoneVerifiedAt: { not: null },
         id: { not: req.userId }
       },
-      select: { id: true, name: true, username: true, avatarUrl: true, bio: true }
+      select: { id: true, phone: true, name: true, username: true, avatarUrl: true, bio: true }
     });
     return res.json({ contacts: matches });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { MessageSquare, Phone, Plus, Search, UserCheck, UserPlus, X } from "lucide-react";
+import { ContactRound, MessageSquare, Phone, Plus, Search, UserPlus, X } from "lucide-react";
 import Avatar from "./Avatar.jsx";
+import "./ContactsModal.css";
 
 export default function ContactsModal({ contacts, onSelectContact, onAddContact, onStartCall, onClose }) {
   const [query, setQuery] = useState("");
@@ -23,10 +24,11 @@ export default function ContactsModal({ contacts, onSelectContact, onAddContact,
       name: newName.trim(),
       phone: newPhone.trim(),
       city: newCity.trim() || "India",
-      status: "Available on Blinker-a 🇮🇳",
+      status: "Not on Blinker-a yet",
       avatarUrl: null,
       color: "#84a9ff",
-      online: true
+      online: false,
+      isOnBlinker: false
     };
 
     onAddContact(newContact);
@@ -59,6 +61,16 @@ export default function ContactsModal({ contacts, onSelectContact, onAddContact,
           {query && (
             <button className="clear-search-btn" onClick={() => setQuery("")}><X size={14} /></button>
           )}
+        </div>
+
+        <div className="contacts-sync-box">
+          <div>
+            <strong>Find people using your phone contacts</strong>
+            <small>Only phone numbers are checked. Contact names and your address book stay on this device.</small>
+          </div>
+          <button type="button" className="primary-button" onClick={onImportDeviceContacts}>
+            <ContactRound size={15} /> Sync contacts
+          </button>
         </div>
 
         {/* Add New Contact Trigger / Form */}

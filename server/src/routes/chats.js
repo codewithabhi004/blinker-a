@@ -54,6 +54,7 @@ chatRouter.post("/", async (req, res, next) => {
     const { type, title, memberIds } = req.body ?? {};
     const supported = ["PRIVATE", "GROUP", "CHANNEL"].includes(type);
     if (!supported || !Array.isArray(memberIds) || memberIds.length > 200 ||
+        !memberIds.every((id) => typeof id === "string") ||
         (type !== "PRIVATE" && (typeof title !== "string" || !title.trim()))) {
       return res.status(400).json({ error: "Provide a chat type, valid members, and a title for groups or channels." });
     }
@@ -76,8 +77,19 @@ chatRouter.post("/", async (req, res, next) => {
           create: ids.map((userId) => ({ userId, role: userId === req.userId ? "OWNER" : "MEMBER" }))
         }
       },
-      include: { members: true }
+      include: {
+        members: { include: { user: { select: { id: true, name: true, username: true, avatarUrl: true } } } },
+        group: true,
+        messages: true
+      }
     });
+    const io = req.app.get("io");
+    for (const userId of ids) {
+      await io.in(`user:${userId}`).socketsJoin(`chat:${chat.id}`);
+      if (userId !== req.userId) {
+        io.to(`user:${userId}`).emit("chat:added", { chatId: chat.id });
+      }
+    }
     return res.status(201).json({ chat });
   } catch (error) {
     if (error.code === "P2003") return res.status(400).json({ error: "One or more members do not exist." });

@@ -4,6 +4,9 @@ import {
   Bell, Check, ChevronRight, Moon, Phone, Search, Shield, Sun, Users, X
 } from "lucide-react";
 import { io } from "socket.io-client";
+import { Capacitor } from "@capacitor/core";
+import { Contacts as NativeContacts } from "@capacitor-community/contacts";
+import { API_BASE, apiRequest } from "./api.js";
 import Avatar from "./components/Avatar.jsx";
 import ChatSidebar from "./components/ChatSidebar.jsx";
 import ChatWindow from "./components/ChatWindow.jsx";
@@ -13,15 +16,15 @@ import ProfileModal from "./components/ProfileModal.jsx";
 import WallpaperModal from "./components/WallpaperModal.jsx";
 import ContactsModal from "./components/ContactsModal.jsx";
 import InstallAppModal from "./components/InstallAppModal.jsx";
+import AuthScreen from "./components/AuthScreen.jsx";
 import {
-  avatarColors, defaultUser, indianContacts, starterChats, starterStories, wallpaperPresets
+  avatarColors, wallpaperPresets
 } from "./data.js";
 
-const API = import.meta.env.VITE_API_URL ?? "";
 const emptySettings = {
   theme: "dark",
   notifications: true,
-  discoverable: true,
+  discoverable: false,
   countryCode: "+91"
 };
 
@@ -36,6 +39,7 @@ const defaultWallpaperConfig = {
 };
 
 const nowLabel = () => new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date());
+const formatMessageTime = (value) => new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 function loadStored(key, fallback) {
   try {
@@ -50,17 +54,61 @@ function AvatarColor(index) {
   return avatarColors[index % avatarColors.length];
 }
 
+function mapMessage(message, userId) {
+  const isMine = message.senderId === userId;
+  return {
+    id: message.id,
+    from: isMine ? "me" : "them",
+    sender: message.sender?.name,
+    text: message.deletedAt ? "This message was deleted." : message.text ?? "",
+    deleted: Boolean(message.deletedAt),
+    time: formatMessageTime(message.createdAt),
+    read: Boolean(message.receipts?.some((receipt) => receipt.userId !== userId && receipt.readAt)),
+    delivered: Boolean(message.receipts?.some((receipt) => receipt.userId !== userId && receipt.deliveredAt)),
+    reply: message.replyTo?.text,
+    kind: message.kind?.toLowerCase() ?? "text",
+    fileUrl: message.mediaUrl,
+    fileName: message.mediaName,
+    forwarded: Boolean(message.forwardedFromId),
+    reactions: []
+  };
+}
+
+function mapChat(chat, userId) {
+  const peer = chat.members?.find((member) => member.userId !== userId)?.user;
+  const messages = [...(chat.messages ?? [])]
+    .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt))
+    .map((message) => mapMessage(message, userId));
+  const type = chat.type?.toLowerCase();
+  return {
+    id: chat.id,
+    name: chat.title || peer?.name || "Conversation",
+    username: peer?.username ? `@${peer.username}` : "",
+    avatarUrl: peer?.avatarUrl,
+    color: AvatarColor((chat.id?.length ?? 0) % avatarColors.length),
+    peerId: peer?.id,
+    type,
+    group: type === "group",
+    channel: type === "channel",
+    membersCount: chat.members?.length ?? 0,
+    unread: messages.filter((message) => message.from === "them" && !message.read).length,
+    pinned: chat.pinnedMessage?.text ?? "",
+    messages
+  };
+}
+
 export default function App() {
-  const [chats, setChats] = useState(() => loadStored("blinker-chats", starterChats));
-  const [contacts, setContacts] = useState(() => loadStored("blinker-contacts", indianContacts));
-  const [activeId, setActiveId] = useState(() => loadStored("blinker-active", "priya"));
+  const [token, setToken] = useState(() => localStorage.getItem("blinker-token"));
+  const [chats, setChats] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [activeId, setActiveId] = useState(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [mobileTab, setMobileTab] = useState("chats");
   const [settings, setSettings] = useState(() => loadStored("blinker-settings", emptySettings));
-  const [user, setUser] = useState(() => loadStored("blinker-user", defaultUser));
+  const [user, setUser] = useState(null);
   const [wallpaperConfig, setWallpaperConfig] = useState(() => loadStored("blinker-wallpaper", defaultWallpaperConfig));
-  const [stories, setStories] = useState(() => loadStored("blinker-stories", starterStories));
+  const [stories, setStories] = useState([]);
 
   // Modals
   const [showProfile, setShowProfile] = useState(false);
@@ -73,25 +121,14 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    const handler = (e) => {
-      e.preventDefault();
-      setInstallPrompt(e);
-    };
-    window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
 
   // Messaging state
   const [replyTo, setReplyTo] = useState(null);
   const [typing, setTyping] = useState(false);
   const [editDraft, setEditDraft] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const [token, setToken] = useState(() => localStorage.getItem("blinker-token"));
   const [socket, setSocket] = useState(null);
   const [toast, setToast] = useState("");
 
@@ -104,40 +141,122 @@ export default function App() {
   // Persist state to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem("blinker-chats", JSON.stringify(chats));
-      localStorage.setItem("blinker-contacts", JSON.stringify(contacts));
-      localStorage.setItem("blinker-active", JSON.stringify(activeId));
       localStorage.setItem("blinker-settings", JSON.stringify(settings));
-      localStorage.setItem("blinker-user", JSON.stringify(user));
       localStorage.setItem("blinker-wallpaper", JSON.stringify(wallpaperConfig));
-      localStorage.setItem("blinker-stories", JSON.stringify(stories));
     } catch {
-      // Local storage full
+      setToast("App preferences could not be saved on this device.");
     }
-  }, [chats, contacts, activeId, settings, user, wallpaperConfig, stories]);
+  }, [settings, wallpaperConfig]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings]);
 
-  // Socket.io integration if connected
   useEffect(() => {
-    if (!token) return undefined;
-    const client = io(API || window.location.origin, { auth: { token }, transports: ["websocket", "polling"] });
+    if (!token) {
+      setUser(null);
+      setChats([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    Promise.all([
+      apiRequest("/api/auth/me", { token }),
+      apiRequest("/api/chats", { token })
+    ]).then(([account, result]) => {
+      if (cancelled) return;
+      setUser(account.user);
+      const loadedChats = result.chats.map((item) => mapChat(item, account.user.id));
+      setChats(loadedChats);
+      setActiveId((current) => loadedChats.some((item) => item.id === current) ? current : loadedChats[0]?.id ?? null);
+      setSettings((current) => ({ ...current, discoverable: account.user.discoverableByPhone }));
+    }).catch((error) => {
+      if (cancelled) return;
+      localStorage.removeItem("blinker-token");
+      setToken(null);
+      setToast(error.message);
+    });
+
+    return () => { cancelled = true; };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || !user?.id) return undefined;
+    const client = io(API_BASE || window.location.origin, { auth: { token }, transports: ["websocket", "polling"] });
     setSocket(client);
-    client.on("connect_error", () => {});
+    client.on("connect_error", (error) => setToast(error.message || "Live chat connection failed."));
+    client.on("presence:snapshot", ({ userIds }) => {
+      const online = new Set(userIds);
+      setChats((items) => items.map((item) => item.peerId ? { ...item, online: online.has(item.peerId) } : item));
+    });
     client.on("message:new", (message) => {
-      setChats((items) => items.map((item) => item.id !== message.chatId ? item : {
-        ...item,
-        messages: [...item.messages.filter((old) => old.id !== message.id), {
-          id: message.id,
-          from: message.senderId === user?.id ? "me" : "them",
-          sender: message.sender?.name,
-          text: message.text ?? "",
-          time: new Date(message.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
-          read: false
-        }]
+      const incoming = message.senderId !== user.id;
+      if (incoming && activeChatRef.current === message.chatId) {
+        client.emit("message:read", { chatId: message.chatId }, (result) => {
+          if (result?.error) setToast(result.error);
+        });
+      }
+      setChats((items) => items.map((item) => {
+        if (item.id !== message.chatId) return item;
+        const alreadyReceived = item.messages.some((old) => old.id === message.id);
+        return {
+          ...item,
+          unread: incoming && !alreadyReceived && activeChatRef.current !== message.chatId ? item.unread + 1 : item.unread,
+          messages: [...item.messages.filter((old) => old.id !== message.id), mapMessage(message, user.id)]
+        };
       }));
+    });
+    client.on("message:updated", (message) => {
+      setChats((items) => items.map((item) => item.id !== message.chatId ? item : ({
+        ...item,
+        messages: item.messages.map((old) => old.id === message.id ? mapMessage(message, user.id) : old)
+      })));
+    });
+    client.on("message:deleted", ({ messageId, forEveryone }) => {
+      setChats((items) => items.map((item) => ({
+        ...item,
+        messages: forEveryone
+          ? item.messages.map((old) => old.id === messageId ? { ...old, deleted: true, text: "This message was deleted." } : old)
+          : item.messages.filter((old) => old.id !== messageId)
+      })));
+    });
+    client.on("chat:added", async () => {
+      try {
+        const result = await apiRequest("/api/chats", { token });
+        setChats(result.chats.map((item) => mapChat(item, user.id)));
+      } catch (error) {
+        setToast(error.message);
+      }
+    });
+    client.on("presence:online", ({ userId }) => {
+      setChats((items) => items.map((item) => item.peerId === userId ? { ...item, online: true } : item));
+    });
+    client.on("presence:offline", ({ userId }) => {
+      setChats((items) => items.map((item) => item.peerId === userId ? { ...item, online: false } : item));
+    });
+    client.on("typing:start", ({ chatId }) => {
+      if (activeChatRef.current === chatId) setTyping(true);
+    });
+    client.on("typing:stop", ({ chatId }) => {
+      if (activeChatRef.current === chatId) setTyping(false);
+    });
+    client.on("receipt:read", ({ messageIds }) => {
+      const readIds = new Set(messageIds);
+      setChats((items) => items.map((item) => ({
+        ...item,
+        messages: item.messages.map((message) => readIds.has(message.id) ? { ...message, read: true } : message)
+      })));
+    });
+    client.on("receipt:delivered", ({ messageId }) => {
+      setChats((items) => items.map((item) => ({
+        ...item,
+        messages: item.messages.map((message) => message.id === messageId ? { ...message, delivered: true } : message)
+      })));
+    });
+    client.on("chat:pinned", ({ chatId, message }) => {
+      setChats((items) => items.map((item) => item.id === chatId
+        ? { ...item, pinned: message.text || "Shared attachment" }
+        : item));
     });
     return () => {
       client.disconnect();
@@ -159,130 +278,159 @@ export default function App() {
     setActiveId(id);
     setMobileOpen(true);
     updateChat(id, (item) => ({ ...item, unread: 0 }));
+    if (socket?.connected) {
+      socket.emit("message:read", { chatId: id }, (result) => {
+        if (result?.error) setToast(result.error);
+      });
+    }
     setShowDetails(false);
     setReplyTo(null);
   }
 
-  function handleSelectContact(contact) {
-    // Check if chat already exists with this contact
-    let existingChat = chats.find((c) => c.id === contact.id || c.phone === contact.phone);
-    if (!existingChat) {
-      existingChat = {
-        id: contact.id,
-        name: contact.name,
-        username: `@${contact.name.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
-        phone: contact.phone,
-        bio: contact.status || "Hey there! I am using Blinker-a 🇮🇳",
-        avatarUrl: contact.avatarUrl,
-        color: contact.color || AvatarColor(chats.length),
-        online: contact.online ?? true,
-        statusText: contact.online ? "online now" : "last seen recently",
-        type: "direct",
-        unread: 0,
-        messages: [
-          {
-            id: `welcome-${Date.now()}`,
-            from: "them",
-            sender: contact.name,
-            text: `Namaste Abhishek! Kaise ho? Glad to connect on Blinker-a ✨`,
-            time: nowLabel()
-          }
-        ]
-      };
-      setChats([existingChat, ...chats]);
-    }
-    setActiveId(existingChat.id);
-    setMobileOpen(true);
-    setShowContacts(false);
-    setToast(`Chat started with ${contact.name}`);
-  }
-
-  function handleAddContact(newContact) {
-    setContacts([newContact, ...contacts]);
-    handleSelectContact(newContact);
-  }
-
-  function sendMessage({ text, file, kind, voiceDuration, waveform }) {
-    if (!chat) return;
-
-    if (editingId) {
-      updateChat(chat.id, (item) => ({
-        ...item,
-        messages: item.messages.map((entry) => entry.id === editingId ? { ...entry, text, edited: true } : entry)
-      }));
-      setEditingId(null);
-      setEditDraft(null);
-      setReplyTo(null);
+  async function handleSelectContact(contact) {
+    const peerId = contact.userId || contact.id;
+    if (!peerId || contact.isOnBlinker === false) {
+      setToast("This number is not linked to a Blinker-a account yet.");
       return;
     }
 
-    const fileUrl = file ? URL.createObjectURL(file) : null;
-    const isImage = file?.type.startsWith("image/");
-    const isVideo = file?.type.startsWith("video/");
-    const isAudio = file?.type.startsWith("audio/") || kind === "audio";
-
-    const message = {
-      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      from: "me",
-      text: text || (file ? `Shared ${file.name}` : ""),
-      time: nowLabel(),
-      read: true,
-      delivered: true,
-      reply: replyTo?.text,
-      fileName: file?.name,
-      fileUrl,
-      kind: isImage ? "image" : isVideo ? "video" : isAudio ? "audio" : file ? "file" : "text",
-      voiceDuration: voiceDuration || (isAudio ? "0:12" : undefined),
-      waveform: waveform || (isAudio ? [30, 60, 90, 70, 40, 80, 100, 75, 45, 60, 85, 40, 30, 60, 90, 50, 30] : undefined),
-      reactions: []
-    };
-
-    updateChat(chat.id, (item) => ({
-      ...item,
-      messages: [...item.messages, message]
-    }));
-    setReplyTo(null);
-
-    // Realistic Indian conversational reply simulation
-    if (!chat.group && !chat.channel) {
-      setTimeout(() => {
-        setTyping(true);
-        setTimeout(() => {
-          setTyping(false);
-          let replyText = "Haan bhai, bilkul sahi baat hai!";
-          const lower = (text || "").toLowerCase();
-
-          if (lower.includes("kaisa") || lower.includes("kaise") || lower.includes("how")) {
-            replyText = "Sab badhiya chal raha hai Abhishek! Tum sunao, kya plan hai aaj shaam ka?";
-          } else if (lower.includes("chai") || lower.includes("tea") || lower.includes("coffee")) {
-            replyText = "Haan yaar, ek adrak wali kadak chai toh banti hai! ☕";
-          } else if (lower.includes("match") || lower.includes("cricket") || lower.includes("score")) {
-            replyText = "Aaj India ka match bohot exciting hai! Rohit aur Kohli dono form me hain 🏏🔥";
-          } else if (lower.includes("photo") || lower.includes("camera") || lower.includes("pic")) {
-            replyText = "Bohot shaandar clicks hain! Insta aur Blinker status pe daal do 📸✨";
-          } else if (lower.includes("call") || lower.includes("phone")) {
-            replyText = "Haan bilkul, thodi der me call karta hoon!";
-          } else {
-            replyText = "Bohot badhiya! Main thodi der me message karta hoon free hoke 👍";
-          }
-
-          updateChat(chat.id, (c) => ({
-            ...c,
-            messages: [
-              ...c.messages,
-              {
-                id: `reply-${Date.now()}`,
-                from: "them",
-                text: replyText,
-                time: nowLabel(),
-                read: false,
-                reactions: [{ emoji: "❤️", count: 1, mine: false }]
-              }
-            ]
-          }));
-        }, 1500);
-      }, 900);
+    try {
+      let existingChat = chats.find((item) => item.peerId === peerId && !item.group && !item.channel);
+      if (!existingChat) {
+        const result = await apiRequest("/api/chats", {
+          token,
+          method: "POST",
+          body: JSON.stringify({ type: "PRIVATE", memberIds: [peerId] })
+        });
+        existingChat = mapChat(result.chat, user.id);
+        setChats((items) => [existingChat, ...items]);
+        socket?.emit("chat:join", { chatId: existingChat.id });
+      }
+      setActiveId(existingChat.id);
+      setMobileOpen(true);
+      setShowContacts(false);
+      setToast(`Chat opened with ${contact.name}`);
+    } catch (error) {
+      setToast(error.message);
     }
+  }
+
+  function handleAddContact(newContact) {
+    setContacts((items) => [newContact, ...items]);
+    setToast("Contact saved on this device. They can be messaged after joining Blinker-a.");
+  }
+
+  async function importPhoneContacts() {
+    if (!Capacitor.isNativePlatform()) {
+      setToast("Phone contact sync is available in the installed Android app.");
+      return;
+    }
+
+    try {
+      let permission = await NativeContacts.checkPermissions();
+      if (permission.contacts !== "granted" && permission.contacts !== "limited") {
+        permission = await NativeContacts.requestPermissions();
+      }
+      if (permission.contacts !== "granted" && permission.contacts !== "limited") {
+        setToast("Contacts permission was not granted.");
+        return;
+      }
+
+      const { contacts: deviceContacts } = await NativeContacts.getContacts({
+        projection: { name: true, phones: true }
+      });
+      const normalizedPhones = (deviceContacts ?? []).flatMap((deviceContact) =>
+        (deviceContact.phones ?? []).map(({ number }) => {
+          if (!number) return null;
+          const digits = number.replace(/\D/g, "");
+          const international = number.trim().startsWith("+")
+            ? `+${digits}`
+            : number.trim().startsWith("00")
+              ? `+${digits.slice(2)}`
+              : `${settings.countryCode}${digits.replace(/^0+/, "")}`;
+          return /^\+[1-9]\d{7,14}$/.test(international)
+            ? {
+              phone: international,
+              localName: deviceContact.name?.display?.trim() || deviceContact.name?.given?.trim()
+            }
+            : null;
+        }).filter(Boolean)
+      );
+      const localNames = new Map(normalizedPhones.map(({ phone, localName }) => [phone, localName]));
+      const uniquePhones = [...new Set(normalizedPhones.map(({ phone }) => phone))];
+      const matchedUsers = [];
+      for (let index = 0; index < uniquePhones.length; index += 500) {
+        const result = await apiRequest("/api/contacts/match", {
+          token,
+          method: "POST",
+          body: JSON.stringify({
+            phoneNumbers: uniquePhones.slice(index, index + 500),
+            countryCallingCode: settings.countryCode
+          })
+        });
+        matchedUsers.push(...result.contacts);
+      }
+
+      const matchedContacts = matchedUsers.map((matchedUser, index) => ({
+        id: matchedUser.id,
+        userId: matchedUser.id,
+        name: localNames.get(matchedUser.phone) || matchedUser.name,
+        profileName: matchedUser.name,
+        phone: matchedUser.phone,
+        username: matchedUser.username ? `@${matchedUser.username}` : "",
+        bio: matchedUser.bio,
+        avatarUrl: matchedUser.avatarUrl,
+        color: AvatarColor(index),
+        online: false,
+        isOnBlinker: true
+      }));
+      setContacts(matchedContacts);
+      setToast(`${matchedContacts.length} Blinker-a contact${matchedContacts.length === 1 ? "" : "s"} found.`);
+    } catch (error) {
+      setToast(error.message);
+    }
+  }
+
+  function sendMessage({ text, file, kind }) {
+    if (!chat) return;
+
+    if (editingId) {
+      if (!socket?.connected) {
+        setToast("Connect to live chat before editing a message.");
+        return;
+      }
+      socket.emit("message:edit", { messageId: editingId, text }, (result) => {
+        if (result?.error) {
+          setToast(result.error);
+          return;
+        }
+        setEditingId(null);
+        setEditDraft(null);
+        setReplyTo(null);
+      });
+      return;
+    }
+
+    if (file || kind !== "text") {
+      setToast("Text messages are live. Media upload is not configured yet.");
+      return;
+    }
+    if (!socket?.connected) {
+      setToast("Live chat is disconnected. Your message was not sent.");
+      return;
+    }
+
+    socket.emit("message:send", {
+      chatId: chat.id,
+      text,
+      ...(replyTo?.id ? { replyToId: replyTo.id } : {})
+    }, (result) => {
+      if (result?.error) {
+        setToast(result.error);
+        return;
+      }
+      setReplyTo(null);
+    });
   }
 
   function startTyping() {
@@ -306,23 +454,28 @@ export default function App() {
 
   function deleteMessage(message) {
     const forEveryone = message.from === "me" && window.confirm("Delete this message for everyone? Choose Cancel to delete it only for yourself.");
-    if (forEveryone) {
-      updateChat(chat.id, (item) => ({
-        ...item,
-        messages: item.messages.map((entry) => entry.id === message.id ? { ...entry, deleted: true, text: "" } : entry)
-      }));
-    } else {
-      updateChat(chat.id, (item) => ({
-        ...item,
-        messages: item.messages.filter((entry) => entry.id !== message.id)
-      }));
+    if (!socket?.connected) {
+      setToast("Connect to live chat before deleting a message.");
+      return;
     }
+    socket.emit("message:delete", { messageId: message.id, forEveryone }, (result) => {
+      if (result?.error) setToast(result.error);
+    });
   }
 
   function pinMessage(message) {
     if (!message) return;
-    updateChat(chat.id, (item) => ({ ...item, pinned: message.text || "Shared attachment" }));
-    setToast("Pinned message updated.");
+    if (!socket?.connected) {
+      setToast("Connect to live chat before pinning a message.");
+      return;
+    }
+    socket.emit("message:pin", { chatId: chat.id, messageId: message.id }, (result) => {
+      if (result?.error) setToast(result.error);
+      else {
+        updateChat(chat.id, (item) => ({ ...item, pinned: message.text || "Shared attachment" }));
+        setToast("Message pinned.");
+      }
+    });
   }
 
   function forwardMessage(message) {
@@ -331,58 +484,22 @@ export default function App() {
     const selected = Number(window.prompt(`Forward to which chat?\n${choices}`));
     const target = candidates[selected - 1];
     if (!target) return;
-    updateChat(target.id, (item) => ({
-      ...item,
-      messages: [
-        ...item.messages,
-        {
-          ...message,
-          id: `fwd-${Date.now()}`,
-          from: "me",
-          sender: undefined,
-          time: nowLabel(),
-          forwarded: true
-        }
-      ]
-    }));
-    setToast(`Forwarded to ${target.name}.`);
+    if (!socket?.connected) {
+      setToast("Connect to live chat before forwarding a message.");
+      return;
+    }
+    socket.emit("message:forward", { messageId: message.id, chatId: target.id }, (result) => {
+      if (result?.error) setToast(result.error);
+      else setToast(`Forwarded to ${target.name}.`);
+    });
   }
 
-  function handleReact(messageId, emoji) {
-    if (!chat) return;
-    updateChat(chat.id, (item) => ({
-      ...item,
-      messages: item.messages.map((msg) => {
-        if (msg.id !== messageId) return msg;
-        const currentReactions = msg.reactions ? [...msg.reactions] : [];
-        const existing = currentReactions.find((r) => r.emoji === emoji);
-
-        if (existing) {
-          if (existing.mine) {
-            existing.mine = false;
-            existing.count = Math.max(existing.count - 1, 0);
-          } else {
-            existing.mine = true;
-            existing.count += 1;
-          }
-        } else {
-          currentReactions.push({ emoji, count: 1, mine: true });
-        }
-
-        return {
-          ...msg,
-          reactions: currentReactions.filter((r) => r.count > 0)
-        };
-      })
-    }));
+  function handleReact() {
+    setToast("Message reactions are not available yet.");
   }
 
   function handleStartCall(targetContact, isVideo = false) {
-    const c = targetContact || chat;
-    if (!c) return;
-    setCallContact(c);
-    setIsVideoCall(isVideo);
-    setShowCall(true);
+    setToast("Voice and video calling are not connected yet.");
   }
 
   function handleOpenStory(index) {
@@ -424,45 +541,86 @@ export default function App() {
     if (!requestedType) return;
     const choice = requestedType.trim().toLowerCase();
     const isChannel = choice === "channel";
-
-    const created = {
-      id: `chat-${Date.now()}`,
-      name: name.trim(),
-      username: isChannel ? `@${name.toLowerCase().replace(/[^a-z0-9]/g, "")}` : "1 member",
-      color: AvatarColor(chats.length),
-      avatar: name.slice(0, 2).toUpperCase(),
-      group: !isChannel,
-      channel: isChannel,
-      type: isChannel ? "channel" : "group",
-      unread: 0,
-      messages: [
-        {
-          id: `welcome-${Date.now()}`,
-          from: "them",
-          sender: "System",
-          text: isChannel ? `Channel "${name.trim()}" created. Broadcast updates to your subscribers.` : `Group "${name.trim()}" created. Add members and start chatting.`,
-          time: nowLabel()
-        }
-      ]
-    };
-
-    setChats([created, ...chats]);
-    setActiveId(created.id);
-    setMobileOpen(true);
-    setToast(`${isChannel ? "Channel" : "Group"} created!`);
+    try {
+      const result = await apiRequest("/api/chats", {
+        token,
+        method: "POST",
+        body: JSON.stringify({ type: isChannel ? "CHANNEL" : "GROUP", title: name.trim(), memberIds: [] })
+      });
+      const created = mapChat(result.chat, user.id);
+      setChats((items) => [created, ...items]);
+      setActiveId(created.id);
+      setMobileOpen(true);
+      socket?.emit("chat:join", { chatId: created.id });
+      setToast(`${isChannel ? "Channel" : "Group"} created.`);
+    } catch (error) {
+      setToast(error.message);
+    }
   }
 
-  function handleUpdateUser(updated) {
-    setUser(updated);
-    setToast("Indian profile and bio updated successfully!");
+  async function handleUpdateUser(updated) {
+    try {
+      const result = await apiRequest("/api/auth/me", {
+        token,
+        method: "PATCH",
+        body: JSON.stringify({
+          name: updated.name,
+          username: updated.username,
+          bio: updated.bio,
+          avatarUrl: updated.avatarUrl,
+          discoverableByPhone: updated.discoverableByPhone
+        })
+      });
+      setUser((current) => ({ ...current, ...result.user }));
+      setSettings((current) => ({ ...current, discoverable: result.user.discoverableByPhone }));
+      setToast("Profile updated.");
+      return true;
+    } catch (error) {
+      setToast(error.message);
+      return false;
+    }
+  }
+
+  async function updatePhoneDiscovery(discoverableByPhone) {
+    setSettings((current) => ({ ...current, discoverable: discoverableByPhone }));
+    try {
+      const result = await apiRequest("/api/auth/me", {
+        token,
+        method: "PATCH",
+        body: JSON.stringify({ discoverableByPhone })
+      });
+      setUser((current) => ({ ...current, ...result.user }));
+    } catch (error) {
+      setSettings((current) => ({ ...current, discoverable: !discoverableByPhone }));
+      setToast(error.message);
+    }
   }
 
   function signOut() {
     localStorage.removeItem("blinker-token");
     setToken(null);
-    setUser(defaultUser);
+    setUser(null);
+    setChats([]);
+    setContacts([]);
+    setActiveId(null);
     setShowProfile(false);
-    setToast("Default profile restored.");
+    setToast("");
+  }
+
+  if (!token || !user) {
+    return (
+      <AuthScreen
+        onAuthenticated={({ token: nextToken, user: nextUser }) => {
+          localStorage.setItem("blinker-token", nextToken);
+          setChats([]);
+          setContacts([]);
+          setActiveId(null);
+          setUser(nextUser);
+          setSettings((current) => ({ ...current, discoverable: nextUser.discoverableByPhone }));
+          setToken(nextToken);
+        }}
+      />
+    );
   }
 
   return (
@@ -493,6 +651,7 @@ export default function App() {
           if (tab === "calls") handleStartCall(chat, false);
           if (tab === "status") handleOpenStory(0);
           if (tab === "profile") setShowProfile(true);
+          if (tab === "settings") setShowSettings(true);
         }}
         onStartCall={() => handleStartCall(chat, false)}
         onOpenInstall={() => setShowInstall(true)}
@@ -536,7 +695,7 @@ export default function App() {
               <small>{chat.username || "@username"}</small>
               {chat.phone && <p className="details-phone">{chat.phone}</p>}
               {chat.bio && <p className="details-bio">"{chat.bio}"</p>}
-              <span className="details-encryption"><Shield size={13} /> End-to-end encrypted · Made in India</span>
+              <span className="details-encryption"><Shield size={13} /> Private Blinker-a chat</span>
             </div>
 
             <div className="details-section">
@@ -594,6 +753,7 @@ export default function App() {
           contacts={contacts}
           onSelectContact={handleSelectContact}
           onAddContact={handleAddContact}
+          onImportDeviceContacts={importPhoneContacts}
           onStartCall={(contact, isVideo) => handleStartCall(contact, isVideo)}
           onClose={() => setShowContacts(false)}
         />
@@ -641,18 +801,6 @@ export default function App() {
       {/* App Install / Download Modal */}
       {showInstall && (
         <InstallAppModal
-          installPrompt={installPrompt}
-          onTriggerInstall={async () => {
-            if (installPrompt) {
-              await installPrompt.prompt();
-              const choice = await installPrompt.userChoice;
-              if (choice.outcome === "accepted") {
-                setToast("Blinker-a app successfully installed on your phone!");
-              }
-              setInstallPrompt(null);
-            }
-            setShowInstall(false);
-          }}
           onClose={() => setShowInstall(false)}
         />
       )}
@@ -716,7 +864,7 @@ export default function App() {
                 <input
                   type="checkbox"
                   checked={settings.discoverable}
-                  onChange={(e) => setSettings((v) => ({ ...v, discoverable: e.target.checked }))}
+                  onChange={(e) => updatePhoneDiscovery(e.target.checked)}
                 />
               </label>
             </div>

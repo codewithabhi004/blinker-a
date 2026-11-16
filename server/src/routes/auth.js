@@ -1,39 +1,96 @@
 import { Router } from "express";
-import { createHash, randomInt, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import { prisma } from "../db.js";
 import { createToken, requireAuth } from "../auth.js";
 
 export const authRouter = Router();
 
-function normalizeIdentifier(value) {
+const scrypt = promisify(scryptCallback);
+
+function normalizePhone(value) {
   if (typeof value !== "string") return null;
-  const identifier = value.trim().toLowerCase();
-  if (identifier.includes("@")) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier) ? identifier : null;
-  }
-  const phone = `+${identifier.replace(/\D/g, "")}`;
+  const phone = `+${value.trim().replace(/\D/g, "")}`;
   return /^\+[1-9]\d{7,14}$/.test(phone) ? phone : null;
 }
 
 const hashCode = (code) => createHash("sha256").update(code).digest("hex");
 
+async function hashPassword(password) {
+  const salt = randomBytes(16);
+  const key = await scrypt(password, salt, 64);
+  return `${salt.toString("hex")}:${key.toString("hex")}`;
+}
+
+async function verifyPassword(password, storedHash) {
+  const [saltHex, keyHex] = storedHash.split(":");
+  if (!/^[\da-f]{32}$/.test(saltHex) || !/^[\da-f]{128}$/.test(keyHex)) return false;
+  const actual = await scrypt(password, Buffer.from(saltHex, "hex"), 64);
+  return timingSafeEqual(actual, Buffer.from(keyHex, "hex"));
+}
+
+async function sendSms(phone, code) {
+  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER } = process.env;
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
+    return { configured: false };
+  }
+
+  const credentials = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString("base64");
+  const body = new URLSearchParams({
+    To: phone,
+    From: TWILIO_FROM_NUMBER,
+    Body: `Your Blinker-a verification code is ${code}. It expires in 5 minutes. Never share this code.`
+  });
+  const response = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(TWILIO_ACCOUNT_SID)}/Messages.json`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body
+    }
+  );
+  if (!response.ok) {
+    console.error("SMS provider rejected a verification message", { status: response.status });
+    return { configured: true, sent: false };
+  }
+  return { configured: true, sent: true };
+}
+
 authRouter.post("/request-otp", async (req, res, next) => {
   try {
-    if (process.env.NODE_ENV === "production") {
-      return res.status(503).json({ error: "OTP delivery is not configured. Connect an SMS/email provider before enabling production sign-in." });
+    const phone = normalizePhone(req.body?.phone ?? req.body?.identifier);
+    if (!phone) return res.status(400).json({ error: "Enter a valid phone number in international format, such as +919876543210." });
+    const existing = await prisma.user.findUnique({ where: { phone }, select: { passwordHash: true } });
+    if (existing?.passwordHash) {
+      return res.status(409).json({ error: "An account already uses this phone. Sign in with your password." });
     }
-    const identifier = normalizeIdentifier(req.body?.identifier);
-    if (!identifier) return res.status(400).json({ error: "Enter a valid email address or international phone number." });
+    if (process.env.NODE_ENV === "production" &&
+        (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_FROM_NUMBER)) {
+      return res.status(503).json({ error: "SMS verification is not configured. Add the Twilio account SID, auth token, and sender number to the API environment." });
+    }
+
     const code = String(randomInt(100000, 1000000));
     await prisma.loginCode.upsert({
-      where: { identifier },
-      create: { identifier, codeHash: hashCode(code), expiresAt: new Date(Date.now() + 5 * 60_000) },
+      where: { identifier: phone },
+      create: { identifier: phone, codeHash: hashCode(code), expiresAt: new Date(Date.now() + 5 * 60_000) },
       update: { codeHash: hashCode(code), expiresAt: new Date(Date.now() + 5 * 60_000), attempts: 0 }
     });
+
     if (process.env.NODE_ENV !== "production") {
-      console.info(`Development OTP for ${identifier}: ${code}`);
+      console.info(`Development OTP for ${phone}: ${code}`);
+    } else {
+      const delivery = await sendSms(phone, code);
+      if (!delivery.configured) {
+        return res.status(503).json({ error: "SMS verification is not configured." });
+      }
+      if (!delivery.sent) {
+        return res.status(502).json({ error: "The SMS provider could not send the verification code. Check its configuration and try again." });
+      }
     }
-    return res.status(202).json({ message: "If the address can receive a code, it will arrive shortly." });
+    return res.status(202).json({ message: "If the number can receive a code, it will arrive shortly." });
   } catch (error) {
     return next(error);
   }
@@ -41,37 +98,82 @@ authRouter.post("/request-otp", async (req, res, next) => {
 
 authRouter.post("/verify-otp", async (req, res, next) => {
   try {
-    const identifier = normalizeIdentifier(req.body?.identifier);
+    const phone = normalizePhone(req.body?.phone ?? req.body?.identifier);
     const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
-    if (!identifier || !/^\d{6}$/.test(code)) {
-      return res.status(400).json({ error: "Enter the identifier and six-digit code." });
+    const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!phone || !/^\d{6}$/.test(code) || name.length < 2 || name.length > 80 ||
+        password.length < 12 || password.length > 128) {
+      return res.status(400).json({ error: "Enter your phone, six-digit SMS code, name, and a password of 12–128 characters." });
     }
-    const loginCode = await prisma.loginCode.findUnique({ where: { identifier } });
-    if (!loginCode || loginCode.expiresAt < new Date() || loginCode.attempts >= 5 ||
-        !timingSafeEqual(Buffer.from(loginCode.codeHash), Buffer.from(hashCode(code)))) {
+
+    const loginCode = await prisma.loginCode.findUnique({ where: { identifier: phone } });
+    const matches = loginCode && timingSafeEqual(Buffer.from(loginCode.codeHash), Buffer.from(hashCode(code)));
+    if (!loginCode || loginCode.expiresAt < new Date() || loginCode.attempts >= 5 || !matches) {
       if (loginCode) {
         await prisma.loginCode.update({
-          where: { identifier },
+          where: { identifier: phone },
           data: { attempts: { increment: 1 } }
         });
       }
       return res.status(401).json({ error: "That code is invalid or expired. Request a new one." });
     }
 
-    const isPhone = identifier.startsWith("+");
-    const where = isPhone ? { phone: identifier } : { email: identifier };
-    const user = await prisma.user.upsert({
-      where,
-      create: {
-        ...where,
-        name: isPhone ? "New Blinker" : identifier.split("@")[0]
-      },
-      update: {}
+    const existing = await prisma.user.findUnique({ where: { phone }, select: { id: true, passwordHash: true } });
+    if (existing?.passwordHash) {
+      return res.status(409).json({ error: "An account already uses this phone. Sign in with your password." });
+    }
+
+    const passwordHash = await hashPassword(password);
+    const user = await prisma.$transaction(async (transaction) => {
+      const created = await transaction.user.upsert({
+        where: { phone },
+        create: { phone, name, passwordHash, phoneVerifiedAt: new Date() },
+        update: { name, passwordHash, phoneVerifiedAt: new Date() }
+      });
+      await transaction.loginCode.delete({ where: { identifier: phone } });
+      return created;
     });
-    await prisma.loginCode.delete({ where: { identifier } });
+
+    return res.status(201).json({
+      token: createToken(user),
+      user: {
+        id: user.id,
+        phone: user.phone,
+        name: user.name,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+        bio: user.bio,
+        discoverableByPhone: user.discoverableByPhone
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+authRouter.post("/login", async (req, res, next) => {
+  try {
+    const phone = normalizePhone(req.body?.phone);
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!phone || !password || password.length > 128) {
+      return res.status(400).json({ error: "Enter your phone number and password." });
+    }
+    const user = await prisma.user.findUnique({ where: { phone } });
+    if (!user?.passwordHash || !user.phoneVerifiedAt || !(await verifyPassword(password, user.passwordHash))) {
+      return res.status(401).json({ error: "Phone number or password is incorrect." });
+    }
     return res.json({
       token: createToken(user),
-      user: { id: user.id, name: user.name, username: user.username, avatarUrl: user.avatarUrl, bio: user.bio }
+      user: {
+        id: user.id,
+        phone: user.phone,
+        name: user.name,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+        bio: user.bio,
+        discoverableByPhone: user.discoverableByPhone
+      }
     });
   } catch (error) {
     return next(error);
@@ -82,7 +184,7 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { id: true, name: true, username: true, avatarUrl: true, bio: true, discoverableByPhone: true }
+      select: { id: true, phone: true, name: true, username: true, avatarUrl: true, bio: true, discoverableByPhone: true }
     });
     if (!user) return res.status(404).json({ error: "Account not found." });
     return res.json({ user });
@@ -122,7 +224,7 @@ authRouter.patch("/me", requireAuth, async (req, res, next) => {
     const user = await prisma.user.update({
       where: { id: req.userId },
       data,
-      select: { id: true, name: true, username: true, avatarUrl: true, bio: true, discoverableByPhone: true }
+      select: { id: true, phone: true, name: true, username: true, avatarUrl: true, bio: true, discoverableByPhone: true }
     });
     return res.json({ user });
   } catch (error) {

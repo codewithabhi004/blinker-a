@@ -1,18 +1,13 @@
-// MOCKED — in-memory fallback for AI Studio container environment
-console.warn('[AI Studio] Database not connected — using mock');
-const noOp = {
-  findMany: async () => [],
-  findFirst: async () => null,
-  findUnique: async () => null,
-  create: async (d) => d?.data ?? {},
-  update: async (d) => d?.data ?? {},
-  upsert: async (d) => d?.create ?? d?.update ?? {},
-  delete: async () => ({})
-};
+import dotenv from "dotenv";
+import { fileURLToPath } from "node:url";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "./generated/client/index.js";
 
-export const prisma = new Proxy({}, {
-  get: () => new Proxy(noOp, {
-    get: (target, prop) => target[prop] || (async () => ({}))
-  })
-});
+dotenv.config({ path: fileURLToPath(new URL("../../.env", import.meta.url)) });
 
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL must be configured.");
+}
+
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+export const prisma = new PrismaClient({ adapter });

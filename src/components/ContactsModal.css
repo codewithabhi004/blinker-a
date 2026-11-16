@@ -1,0 +1,21 @@
+.contacts-sync-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-raised);
+}
+
+.contacts-sync-box > div { display: grid; gap: 5px; }
+.contacts-sync-box strong { font-size: 12px; }
+.contacts-sync-box small { max-width: 290px; color: var(--muted); line-height: 1.45; }
+.contacts-sync-box button { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; }
+
+@media (max-width: 480px) {
+  .contacts-sync-box { align-items: stretch; flex-direction: column; }
+  .contacts-sync-box button { justify-content: center; }
+}

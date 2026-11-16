@@ -18,22 +18,33 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 
 const app = express();
 const httpServer = createServer(app);
-const allowedOrigins = (process.env.CLIENT_ORIGIN ?? "http://localhost:5173")
+const allowedOrigins = (process.env.CLIENT_ORIGIN ?? "http://localhost:3000")
   .split(",")
   .map((origin) => origin.trim());
+if (process.env.NODE_ENV === "production" && !process.env.CLIENT_ORIGIN) {
+  throw new Error("CLIENT_ORIGIN must be configured in production.");
+}
 const io = new Server(httpServer, {
   cors: { origin: allowedOrigins, methods: ["GET", "POST"] }
 });
 app.set("io", io);
 
 app.disable("x-powered-by");
+app.set("trust proxy", 1);
 app.use(helmet());
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json({ limit: "32kb" }));
-app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 20 }), authRouter);
-app.use("/api/contacts", contactRouter);
+app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 5 }), authRouter);
+app.use("/api/contacts", rateLimit({ windowMs: 15 * 60 * 1000, limit: 30 }), contactRouter);
 app.use("/api/chats", chatRouter);
-app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
+app.get("/api/health", async (_req, res, next) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return res.json({ status: "ok" });
+  } catch (error) {
+    return next(error);
+  }
+});
 app.use((_req, res) => res.status(404).json({ error: "Route not found." }));
 app.use((error, _req, res, next) => {
   if (res.headersSent) return next(error);

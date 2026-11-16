@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Check, Copy, Download, QrCode, Share2, Smartphone, X } from "lucide-react";
+import { Check, Copy, Download, Smartphone, X } from "lucide-react";
+import { APK_DOWNLOAD_URL } from "../api.js";
 
-export default function InstallAppModal({ installPrompt, onTriggerInstall, onClose }) {
+export default function InstallAppModal({ onClose }) {
   const [copied, setCopied] = useState(false);
 
   const shareLink = window.location.href;
@@ -31,38 +32,30 @@ export default function InstallAppModal({ installPrompt, onTriggerInstall, onClo
         </div>
 
         <div className="install-modal-body">
-          {/* Hero Banner */}
           <div className="install-hero-card">
             <div className="install-hero-icon">
               <Smartphone size={32} />
             </div>
             <div className="install-hero-text">
               <h3>Blinker-a for Android</h3>
-              <p>Works like a real Android app with offline chat, voice notes, calls and instant notifications.</p>
+              <p>Download the Android APK to install the native app. This is not a home-screen shortcut.</p>
             </div>
           </div>
 
-          {/* 1-Click Install Button if supported or guided */}
           <div className="install-actions-box">
-            {installPrompt ? (
-              <button
-                type="button"
-                className="primary-button install-main-btn"
-                onClick={onTriggerInstall}
-              >
-                <Download size={18} />
-                <span>Install Directly on Android Phone</span>
-              </button>
-            ) : (
-              <div className="install-guide-box">
-                <strong>📱 How to Install on Android / Phone:</strong>
-                <ol>
-                  <li>Tap the browser menu (<strong>⋮</strong> or three dots at top-right).</li>
-                  <li>Select <strong>"Install App"</strong> or <strong>"Add to Home Screen"</strong>.</li>
-                  <li>Blinker-a icon will appear on your phone's app drawer!</li>
-                </ol>
-              </div>
-            )}
+            <a className="primary-button install-main-btn" href={APK_DOWNLOAD_URL}>
+              <Download size={18} />
+              <span>Download Android APK</span>
+            </a>
+            <div className="install-guide-box">
+              <strong>Install the downloaded app</strong>
+              <ol>
+                <li>Open the downloaded <code>blinker-a.apk</code> file on your Android phone.</li>
+                <li>If Android asks, allow your browser to install unknown apps, then confirm Install.</li>
+                <li>Open Blinker-a from the app drawer and sign in.</li>
+              </ol>
+              <small className="install-note">This test APK is sideloaded, not installed from Google Play. A new debug build may require uninstalling the previous build first.</small>
+            </div>
           </div>
 
           {/* Share with Contacts */}
@@ -88,10 +81,9 @@ export default function InstallAppModal({ installPrompt, onTriggerInstall, onClo
             </button>
           </div>
 
-          {/* Developer Android APK Info */}
           <div className="apk-info-box">
-            <span className="apk-badge">APK BUILD READY</span>
-            <p>Android Studio & Capacitor project is in <code>/android</code>. You can build a release APK using <code>./gradlew assembleDebug</code> or GitHub Actions.</p>
+            <span className="apk-badge">ANDROID APK RELEASE</span>
+            <p>The download link is available after the first tagged Android release has completed in GitHub Actions.</p>
           </div>
         </div>
 

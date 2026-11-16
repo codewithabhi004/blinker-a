@@ -1,20 +1,19 @@
 import { useRef, useState } from "react";
-import { Camera, Check, Copy, Globe, Lock, Mail, Phone, QrCode, Shield, Sparkles, User, X } from "lucide-react";
+import { Camera, Check, Copy, Globe, Lock, Phone, QrCode, Shield, Sparkles, User, X } from "lucide-react";
 import Avatar from "./Avatar.jsx";
 import { statusPresets } from "../data.js";
 
 export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut }) {
   const [formData, setFormData] = useState({
     name: user?.name || "Alex Morgan",
-    username: user?.username || "alexm",
-    phone: user?.phone || "+91 98765 43210",
-    email: user?.email || "alex.morgan@example.com",
-    bio: user?.bio || "Digital creator & explorer 📸 Living one photo at a time.",
-    status: user?.status || "Hey there! I am using Blinker-a.",
+    username: user?.username || "",
+    phone: user?.phone || "",
+    bio: user?.bio || "",
+    status: user?.status || "Using Blinker-a",
     statusEmoji: user?.statusEmoji || "✨",
-    avatarUrl: user?.avatarUrl || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
+    avatarUrl: user?.avatarUrl || "",
     coverUrl: user?.coverUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80",
-    discoverableByPhone: user?.discoverableByPhone ?? true,
+    discoverableByPhone: user?.discoverableByPhone ?? false,
     lastSeenPrivacy: user?.lastSeenPrivacy || "everyone",
     readReceipts: user?.readReceipts ?? true
   });
@@ -22,6 +21,7 @@ export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut })
   const [activeTab, setActiveTab] = useState("profile"); // "profile" | "status" | "qr"
   const [copied, setCopied] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const avatarInputRef = useRef(null);
   const coverInputRef = useRef(null);
@@ -56,9 +56,12 @@ export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut })
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onUpdateUser(formData);
+    setSaving(true);
+    const saved = await onUpdateUser(formData);
+    setSaving(false);
+    if (!saved) return;
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 2500);
   };
@@ -187,25 +190,10 @@ export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut })
                 <small className="char-count">{formData.bio.length}/160</small>
               </div>
 
-              <div className="field-row">
-                <div className="field-group">
-                  <label><Phone size={13} /> Phone Number</label>
-                  <input 
-                    type="tel" 
-                    value={formData.phone} 
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })} 
-                    placeholder="+91 98765 43210" 
-                  />
-                </div>
-                <div className="field-group">
-                  <label><Mail size={13} /> Email Address</label>
-                  <input 
-                    type="email" 
-                    value={formData.email} 
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })} 
-                    placeholder="you@domain.com" 
-                  />
-                </div>
+              <div className="field-group">
+                <label><Phone size={13} /> Verified phone number</label>
+                <input type="tel" value={formData.phone} readOnly />
+                <small className="char-count">Changing your verified number is not available yet.</small>
               </div>
 
               <div className="profile-privacy-box">
@@ -235,8 +223,8 @@ export default function ProfileModal({ user, onUpdateUser, onClose, onSignOut })
               ) : (
                 <button type="button" className="text-button danger" onClick={onSignOut}>Sign Out</button>
               )}
-              <button type="submit" className="primary-button">
-                Save Changes
+              <button type="submit" className="primary-button" disabled={saving}>
+                {saving ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </form>
