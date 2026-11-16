@@ -320,6 +320,22 @@ export default function App() {
     setToast("Contact saved on this device. They can be messaged after joining Blinker-a.");
   }
 
+  async function searchUsername(username) {
+    const result = await apiRequest(`/api/contacts/search?username=${encodeURIComponent(username)}`, { token });
+    return {
+      id: result.user.id,
+      userId: result.user.id,
+      name: result.user.name,
+      phone: "",
+      username: `@${result.user.username}`,
+      bio: result.user.bio,
+      avatarUrl: result.user.avatarUrl,
+      color: AvatarColor(result.user.id.length),
+      online: false,
+      isOnBlinker: true
+    };
+  }
+
   async function importPhoneContacts() {
     if (!Capacitor.isNativePlatform()) {
       setToast("Phone contact sync is available in the installed Android app.");
@@ -752,6 +768,7 @@ export default function App() {
         <ContactsModal
           contacts={contacts}
           onSelectContact={handleSelectContact}
+          onSearchUsername={searchUsername}
           onAddContact={handleAddContact}
           onImportDeviceContacts={importPhoneContacts}
           onStartCall={(contact, isVideo) => handleStartCall(contact, isVideo)}

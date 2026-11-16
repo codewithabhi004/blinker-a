@@ -14,6 +14,12 @@ function normalizePhone(value) {
   return /^\+[1-9]\d{7,14}$/.test(phone) ? phone : null;
 }
 
+function normalizeUsername(value) {
+  if (typeof value !== "string") return null;
+  const username = value.trim().replace(/^@/, "").toLowerCase();
+  return /^[a-z0-9_]{3,32}$/.test(username) ? username : null;
+}
+
 const hashCode = (code) => createHash("sha256").update(code).digest("hex");
 
 async function hashPassword(password) {
@@ -152,16 +158,62 @@ authRouter.post("/verify-otp", async (req, res, next) => {
   }
 });
 
+authRouter.post("/signup", async (req, res, next) => {
+  try {
+    const username = normalizeUsername(req.body?.username);
+    const password = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!username || password.length < 12 || password.length > 128) {
+      return res.status(400).json({ error: "Choose a username (3–32 letters, numbers, or underscores) and a password of 12–128 characters." });
+    }
+
+    const existing = await prisma.user.findUnique({ where: { username }, select: { id: true } });
+    if (existing) return res.status(409).json({ error: "That username is already taken." });
+
+    const user = await prisma.user.create({
+      data: {
+        username,
+        name: username,
+        passwordHash: await hashPassword(password),
+        discoverableByPhone: false
+      }
+    });
+    return res.status(201).json({
+      token: createToken(user),
+      user: {
+        id: user.id,
+        phone: user.phone,
+        name: user.name,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+        bio: user.bio,
+        discoverableByPhone: user.discoverableByPhone
+      }
+    });
+  } catch (error) {
+    if (error.code === "P2002") return res.status(409).json({ error: "That username is already taken." });
+    return next(error);
+  }
+});
+
 authRouter.post("/login", async (req, res, next) => {
   try {
-    const phone = normalizePhone(req.body?.phone);
+    const legacyPhoneLogin = typeof req.body?.phone === "string" &&
+      typeof req.body?.identifier !== "string" && typeof req.body?.username !== "string";
+    const identifier = legacyPhoneLogin
+      ? req.body.phone
+      : typeof req.body?.identifier === "string"
+        ? req.body.identifier
+        : req.body?.username;
+    const looksLikePhone = legacyPhoneLogin || (typeof identifier === "string" && /^\s*(?:\+|00)/.test(identifier));
+    const phone = looksLikePhone ? normalizePhone(identifier) : null;
+    const username = looksLikePhone ? null : normalizeUsername(identifier);
     const password = typeof req.body?.password === "string" ? req.body.password : "";
-    if (!phone || !password || password.length > 128) {
-      return res.status(400).json({ error: "Enter your phone number and password." });
+    if ((!phone && !username) || !password || password.length > 128) {
+      return res.status(400).json({ error: "Enter a valid username or international phone number and password." });
     }
-    const user = await prisma.user.findUnique({ where: { phone } });
-    if (!user?.passwordHash || !user.phoneVerifiedAt || !(await verifyPassword(password, user.passwordHash))) {
-      return res.status(401).json({ error: "Phone number or password is incorrect." });
+    const user = await prisma.user.findUnique({ where: phone ? { phone } : { username } });
+    if (!user?.passwordHash || (phone && !user.phoneVerifiedAt) || !(await verifyPassword(password, user.passwordHash))) {
+      return res.status(401).json({ error: "Username or password is incorrect." });
     }
     return res.json({
       token: createToken(user),
@@ -196,7 +248,18 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
 authRouter.patch("/me", requireAuth, async (req, res, next) => {
   try {
     const data = {};
-    if (typeof req.body?.discoverableByPhone === "boolean") data.discoverableByPhone = req.body.discoverableByPhone;
+    if (req.body?.discoverableByPhone === true) {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { phone: true, phoneVerifiedAt: true }
+      });
+      if (!currentUser?.phone || !currentUser.phoneVerifiedAt) {
+        return res.status(400).json({ error: "Verify a phone number before enabling contact discovery." });
+      }
+      data.discoverableByPhone = true;
+    } else if (req.body?.discoverableByPhone === false) {
+      data.discoverableByPhone = false;
+    }
     if (typeof req.body?.name === "string" && req.body.name.trim()) data.name = req.body.name.trim().slice(0, 80);
     if (typeof req.body?.bio === "string") data.bio = req.body.bio.trim().slice(0, 160);
     if (typeof req.body?.avatarUrl === "string") {
@@ -218,6 +281,15 @@ authRouter.patch("/me", requireAuth, async (req, res, next) => {
       const username = req.body.username.trim().replace(/^@/, "").toLowerCase();
       if (username && !/^[a-z0-9_]{3,32}$/.test(username)) {
         return res.status(400).json({ error: "Username must be 3–32 letters, numbers, or underscores." });
+      }
+      if (!username) {
+        const currentUser = await prisma.user.findUnique({
+          where: { id: req.userId },
+          select: { phoneVerifiedAt: true }
+        });
+        if (!currentUser?.phoneVerifiedAt) {
+          return res.status(400).json({ error: "A username is required while your phone number is unverified." });
+        }
       }
       data.username = username || null;
     }

@@ -53,13 +53,13 @@ Requirements: Node.js 22 and a PostgreSQL database (local PostgreSQL or a hosted
 
 4. Start the API in one terminal: `npm run server`
 5. Start Vite in another terminal: `npm run dev`
-6. Open `http://localhost:3000`. Vite proxies `/api` and Socket.IO to the local API. In development only, requested OTP values are printed in the API terminal.
+6. Open `http://localhost:3000`. Vite proxies `/api` and Socket.IO to the local API.
 
-Sign-up verifies the phone by SMS and then uses a password for future sign-ins. Production SMS uses Twilio; configure `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` on the API host. SMS delivery is not guaranteed to be free and may require an approved Twilio sender or verified destination numbers. The API refuses production sign-up when those values are missing.
+Sign-up and sign-in use a unique username and a password of at least 12 characters. Phone numbers are not required. There is no password-recovery flow yet, so users must keep their password safe. Users can find one another by exact username; phone-contact matching remains unavailable until a phone number has been verified and the user opts in. SMS verification endpoints remain available for a future verified-phone flow, but require a configured SMS provider and may incur charges.
 
 ## Android build
 
-Set `VITE_API_URL` in the root `.env` to the HTTPS URL of your deployed API before building Android assets. The native Android contacts plugin asks for permission only after a user taps **Sync contacts**. The app sends phone numbers for matching; names and the address book remain on the device. Accounts are discoverable by phone only after the account owner opts in.
+Set `VITE_API_URL` in the root `.env` to the HTTPS URL of your deployed API before building Android assets. The native Android contacts plugin asks for permission only after a user taps **Sync contacts**. The app sends phone numbers for matching; names and the address book remain on the device. Phone matching only returns verified profiles that opted in; users without a verified phone can be found by exact username instead.
 
 ```powershell
 npm run build
@@ -81,7 +81,7 @@ The deployment uses Vercel for the static web app, Render for the persistent Exp
 
 1. Push the repository to GitHub and import it into Vercel. The included `vercel.json` builds and serves the Vite app.
 2. Create a PostgreSQL database on Neon (or another PostgreSQL host). In the Vercel project settings, add `VITE_API_URL` with the HTTPS URL of the Render API. Add the same URL as a GitHub Actions repository variable named `VITE_API_URL`; the Pages and Android workflows use it when building.
-3. In Render, create a Blueprint from this repository using `render.yaml`. Set `DATABASE_URL` to the PostgreSQL connection string and `CLIENT_ORIGIN` to the exact frontend origin(s) plus Capacitor's Android origin, comma-separated (for example `https://blinker-a.vercel.app,https://codewithabhi004.github.io,https://localhost`). Render generates `JWT_SECRET`; add the three Twilio values to enable production phone verification.
+3. In Render, create a Blueprint from this repository using `render.yaml`. Set `DATABASE_URL` to the PostgreSQL connection string and `CLIENT_ORIGIN` to the exact frontend origin(s) plus Capacitor's Android origin, comma-separated (for example `https://blinker-a.vercel.app,https://codewithabhi004.github.io,https://localhost`). Render generates `JWT_SECRET`. Twilio credentials are only needed if phone verification is enabled.
 4. With `DATABASE_URL` set in the local `.env`, run `npm run db:push` once to create/update the database schema. Never publish database or Twilio credentials in the repository.
 5. Redeploy the Vercel frontend after setting `VITE_API_URL`, then build/sync Android with that same API URL.
 
@@ -101,4 +101,4 @@ Socket.IO authenticates with `{ auth: { token } }` and supports `chat:join`, `me
 
 ## MVP boundary
 
-Phone/password accounts, SMS verification, PostgreSQL-backed chats, realtime text messages, presence, contact matching, and basic message operations are provided by the API. Media uploads, end-to-end encryption, push notifications, and actual voice/video calling still need additional providers and implementation before a public launch. The current free-tier deployment is suitable for testing, not a reliability guarantee for production.
+Username/password accounts, optional verified-phone contact matching, PostgreSQL-backed chats, realtime text messages, presence, and basic message operations are provided by the API. Username search is exact-match; phone contact matching is limited to verified accounts that opt in. Media uploads, end-to-end encryption, push notifications, and actual voice/video calling still need additional providers and implementation before a public launch. The current free-tier deployment is suitable for testing, not a reliability guarantee for production.

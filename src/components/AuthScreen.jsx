@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
-import { LockKeyhole, MessageCircle, Phone, ShieldCheck } from "lucide-react";
+import { AtSign, LockKeyhole, MessageCircle, ShieldCheck } from "lucide-react";
 import { apiRequest, APK_DOWNLOAD_URL } from "../api.js";
 import "./AuthScreen.css";
 
 export default function AuthScreen({ onAuthenticated }) {
   const [mode, setMode] = useState("login");
-  const [step, setStep] = useState("details");
-  const [phone, setPhone] = useState("+91");
-  const [name, setName] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [apiStatus, setApiStatus] = useState("checking");
@@ -29,25 +27,16 @@ export default function AuthScreen({ onAuthenticated }) {
     setError("");
     setBusy(true);
     try {
-      if (mode === "login") {
-        const result = await apiRequest("/api/auth/login", {
+      const result = mode === "login"
+        ? await apiRequest("/api/auth/login", {
           method: "POST",
-          body: JSON.stringify({ phone, password })
-        });
-        onAuthenticated(result);
-      } else if (step === "details") {
-        await apiRequest("/api/auth/request-otp", {
+          body: JSON.stringify({ identifier, password })
+        })
+        : await apiRequest("/api/auth/signup", {
           method: "POST",
-          body: JSON.stringify({ phone })
+          body: JSON.stringify({ username, password })
         });
-        setStep("verify");
-      } else {
-        const result = await apiRequest("/api/auth/verify-otp", {
-          method: "POST",
-          body: JSON.stringify({ phone, name, password, code })
-        });
-        onAuthenticated(result);
-      }
+      onAuthenticated(result);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -57,8 +46,11 @@ export default function AuthScreen({ onAuthenticated }) {
 
   function changeMode(nextMode) {
     setMode(nextMode);
-    setStep("details");
     setError("");
+  }
+
+  function normalizeUsername(value) {
+    return value.replace(/^@/, "").toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 32);
   }
 
   return (
@@ -69,13 +61,11 @@ export default function AuthScreen({ onAuthenticated }) {
           <span>Blinker-a</span>
         </div>
         <p className="eyebrow">PRIVATE MESSAGING</p>
-        <h1 id="auth-title">{mode === "login" ? "Welcome back" : step === "details" ? "Create your account" : "Verify your phone"}</h1>
+        <h1 id="auth-title">{mode === "login" ? "Welcome back" : "Create your account"}</h1>
         <p className="auth-description">
           {mode === "login"
-            ? "Sign in to see your real conversations."
-            : step === "details"
-              ? "We will text you a one-time code to verify your number."
-              : `Enter the six-digit code sent to ${phone}.`}
+            ? "Sign in with your username or an existing verified phone account."
+            : "Create a username and password. No phone number or SMS is needed."}
         </p>
 
         <div className="auth-mode-tabs" role="tablist" aria-label="Account action">
@@ -84,32 +74,50 @@ export default function AuthScreen({ onAuthenticated }) {
         </div>
 
         <form className="auth-form" onSubmit={submit}>
-          {mode === "signup" && step === "details" && (
+          {mode === "login" ? (
             <label>
-              <span>Your name</span>
-              <input autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} minLength={2} maxLength={80} required />
+              <span><AtSign size={14} /> Username or phone number</span>
+              <input
+                type="text"
+                autoComplete="username"
+                placeholder="@username or +919876543210"
+                value={identifier}
+                onChange={(event) => setIdentifier(event.target.value)}
+                required
+              />
+              <small>Use your username, or an international phone number for an existing verified account.</small>
+            </label>
+          ) : (
+            <label>
+              <span><AtSign size={14} /> Username</span>
+              <input
+                type="text"
+                autoComplete="username"
+                placeholder="your_username"
+                pattern="[A-Za-z0-9_]{3,32}"
+                minLength={3}
+                maxLength={32}
+                value={username}
+                onChange={(event) => setUsername(normalizeUsername(event.target.value))}
+                required
+              />
+              <small>3–32 letters, numbers, or underscores. People can find you by this username.</small>
             </label>
           )}
-          {mode === "signup" && step === "verify" && (
-            <label>
-              <span>SMS verification code</span>
-              <input autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} required />
-            </label>
-          )}
-          {(mode === "login" || step === "details") && (
-            <label>
-              <span><Phone size={14} /> Phone number</span>
-              <input type="tel" autoComplete="tel" inputMode="tel" placeholder="+919876543210" value={phone} onChange={(event) => setPhone(event.target.value)} required />
-              <small>Include your country code, for example +91.</small>
-            </label>
-          )}
-          {(mode === "login" || step === "details") && (
-            <label>
-              <span><LockKeyhole size={14} /> Password</span>
-              <input type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} minLength={12} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} required />
-              {mode === "signup" && <small>Use at least 12 characters.</small>}
-            </label>
-          )}
+          <label>
+            <span><LockKeyhole size={14} /> Password</span>
+            <input
+              type="password"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              minLength={mode === "signup" ? 12 : undefined}
+              maxLength={128}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+            {mode === "signup" && <small>Use at least 12 characters.</small>}
+            {mode === "signup" && <small>Password reset is not available yet, so save your password securely.</small>}
+          </label>
           {error && <p className="auth-error" role="alert">{error}</p>}
           {apiStatus === "checking" && <p className="auth-service-note">Connecting to the chat server…</p>}
           {apiStatus === "unavailable" && (
@@ -122,16 +130,13 @@ export default function AuthScreen({ onAuthenticated }) {
             </div>
           )}
           <button className="primary-button auth-submit" type="submit" disabled={busy || apiStatus !== "ready"}>
-            {busy ? "Please wait..." : mode === "login" ? "Sign in securely" : step === "details" ? "Send verification code" : "Verify & create account"}
+            {busy ? "Please wait..." : mode === "login" ? "Sign in securely" : "Create account"}
           </button>
-          {mode === "signup" && step === "verify" && (
-            <button type="button" className="auth-back" onClick={() => { setStep("details"); setError(""); }}>Change phone or details</button>
-          )}
         </form>
 
         <div className="auth-privacy-note">
           <ShieldCheck size={17} />
-          <span>Your phone number is only discoverable if you opt in to contact matching.</span>
+          <span>Phone contact matching stays off until you verify a phone number. Find people by username instead.</span>
         </div>
         <a className="auth-download-link" href={APK_DOWNLOAD_URL}>
           <span>Want the real Android app?</span>

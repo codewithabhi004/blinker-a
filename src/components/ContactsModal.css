@@ -1,3 +1,29 @@
+.contacts-username-search {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-raised);
+}
+
+.contacts-username-search > label { font-size: 12px; font-weight: 700; }
+.contacts-username-search-row { display: flex; gap: 8px; }
+.contacts-username-search-row input {
+  min-width: 0;
+  flex: 1;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--line-bright);
+  border-radius: 10px;
+  color: var(--ink);
+  background: var(--panel);
+}
+.contacts-username-search-row button { flex: 0 0 auto; }
+.contacts-username-error { color: #ff9a9a; }
+.contacts-username-result { margin-top: 4px; }
+
 .contacts-sync-box {
   display: flex;
   align-items: center;

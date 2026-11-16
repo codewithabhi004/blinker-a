@@ -3,8 +3,12 @@ import { ContactRound, MessageSquare, Phone, Plus, Search, UserPlus, X } from "l
 import Avatar from "./Avatar.jsx";
 import "./ContactsModal.css";
 
-export default function ContactsModal({ contacts, onSelectContact, onAddContact, onStartCall, onClose }) {
+export default function ContactsModal({ contacts, onSelectContact, onSearchUsername, onAddContact, onStartCall, onClose }) {
   const [query, setQuery] = useState("");
+  const [usernameQuery, setUsernameQuery] = useState("");
+  const [usernameResult, setUsernameResult] = useState(null);
+  const [usernameError, setUsernameError] = useState("");
+  const [searchingUsername, setSearchingUsername] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("+91 ");
@@ -12,8 +16,22 @@ export default function ContactsModal({ contacts, onSelectContact, onAddContact,
 
   const filtered = contacts.filter((c) => {
     const q = query.toLowerCase().trim();
-    return c.name.toLowerCase().includes(q) || c.phone.includes(q) || (c.city && c.city.toLowerCase().includes(q));
+    return c.name.toLowerCase().includes(q) || c.phone?.includes(q) || (c.city && c.city.toLowerCase().includes(q));
   });
+
+  const handleUsernameSearch = async (event) => {
+    event.preventDefault();
+    setUsernameError("");
+    setUsernameResult(null);
+    setSearchingUsername(true);
+    try {
+      setUsernameResult(await onSearchUsername(usernameQuery.trim().replace(/^@/, "")));
+    } catch (error) {
+      setUsernameError(error.message);
+    } finally {
+      setSearchingUsername(false);
+    }
+  };
 
   const handleCreateContact = (e) => {
     e.preventDefault();
@@ -62,6 +80,47 @@ export default function ContactsModal({ contacts, onSelectContact, onAddContact,
             <button className="clear-search-btn" onClick={() => setQuery("")}><X size={14} /></button>
           )}
         </div>
+
+        <form className="contacts-username-search" onSubmit={handleUsernameSearch}>
+          <label htmlFor="contacts-username-query">Find people by username</label>
+          <div className="contacts-username-search-row">
+            <input
+              id="contacts-username-query"
+              type="text"
+              placeholder="@username"
+              pattern="@?[A-Za-z0-9_]{3,32}"
+              minLength={3}
+              maxLength={33}
+              value={usernameQuery}
+              onChange={(event) => setUsernameQuery(event.target.value)}
+              required
+            />
+            <button type="submit" className="primary-button" disabled={searchingUsername}>
+              {searchingUsername ? "Searching..." : "Search"}
+            </button>
+          </div>
+          {usernameError && <small className="contacts-username-error" role="alert">{usernameError}</small>}
+          {usernameResult && (
+            <div className="contact-list-item contacts-username-result">
+              <Avatar
+                name={usernameResult.name}
+                color={usernameResult.color}
+                online={usernameResult.online}
+                photo={usernameResult.avatarUrl}
+              />
+              <div className="contact-info">
+                <strong>{usernameResult.name}</strong>
+                <small>{usernameResult.username}</small>
+              </div>
+              <div className="contact-actions">
+                <button type="button" className="contact-chat-btn" onClick={() => onSelectContact(usernameResult)}>
+                  <MessageSquare size={14} />
+                  <span>Chat</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </form>
 
         <div className="contacts-sync-box">
           <div>

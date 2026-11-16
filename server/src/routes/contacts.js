@@ -4,6 +4,25 @@ import { requireAuth } from "../auth.js";
 
 export const contactRouter = Router();
 
+contactRouter.get("/search", requireAuth, async (req, res, next) => {
+  try {
+    const rawUsername = typeof req.query.username === "string" ? req.query.username.trim() : "";
+    const username = rawUsername.replace(/^@/, "").toLowerCase();
+    if (!/^[a-z0-9_]{3,32}$/.test(username)) {
+      return res.status(400).json({ error: "Enter a username with 3–32 letters, numbers, or underscores." });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { username, id: { not: req.userId } },
+      select: { id: true, name: true, username: true, avatarUrl: true, bio: true }
+    });
+    if (!user) return res.status(404).json({ error: "No Blinker-a account was found with that username." });
+    return res.json({ user });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 contactRouter.post("/match", requireAuth, async (req, res, next) => {
   try {
     if (!Array.isArray(req.body?.phoneNumbers) || req.body.phoneNumbers.length > 500) {
