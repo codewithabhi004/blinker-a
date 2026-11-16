@@ -41,9 +41,11 @@ export default function ChatSidebar({
           </div>
 
           <div className="brand-actions">
-            <button className="icon-button install-app-btn" onClick={onOpenInstall} title="Download Android APK" aria-label="Download Android app">
-              <Download size={18} />
-            </button>
+            {onOpenInstall && (
+              <button className="icon-button install-app-btn" onClick={onOpenInstall} title="Download Android APK" aria-label="Download Android app">
+                <Download size={18} />
+              </button>
+            )}
             <button className="icon-button" onClick={onNewChat} title="Create Group or Channel" aria-label="New chat">
               <Plus size={19} />
             </button>
@@ -57,14 +59,16 @@ export default function ChatSidebar({
         </div>
 
         {/* In-App Download / Install Banner for Android */}
-        <div className="sidebar-app-banner" onClick={onOpenInstall} role="button" tabIndex="0">
-          <span className="banner-flag">🇮🇳</span>
-          <div className="banner-copy">
-            <strong>Blinker-a for Android</strong>
-            <small>Download the Android APK</small>
+        {onOpenInstall && (
+          <div className="sidebar-app-banner" onClick={onOpenInstall} role="button" tabIndex="0">
+            <span className="banner-flag">🇮🇳</span>
+            <div className="banner-copy">
+              <strong>Blinker-a for Android</strong>
+              <small>Download the Android APK</small>
+            </div>
+            <span className="banner-install-tag">Install 📱</span>
           </div>
-          <span className="banner-install-tag">Install 📱</span>
-        </div>
+        )}
 
         {/* Search input with Indian symbol */}
         <label className="search-box">

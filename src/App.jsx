@@ -670,7 +670,7 @@ export default function App() {
           if (tab === "settings") setShowSettings(true);
         }}
         onStartCall={() => handleStartCall(chat, false)}
-        onOpenInstall={() => setShowInstall(true)}
+        onOpenInstall={!Capacitor.isNativePlatform() ? () => setShowInstall(true) : undefined}
       />
 
       {/* Main Conversation Window with custom wallpaper, in-chat search, voice notes and reactions */}
@@ -816,7 +816,7 @@ export default function App() {
       )}
 
       {/* App Install / Download Modal */}
-      {showInstall && (
+      {showInstall && !Capacitor.isNativePlatform() && (
         <InstallAppModal
           onClose={() => setShowInstall(false)}
         />

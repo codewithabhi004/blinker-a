@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AtSign, LockKeyhole, MessageCircle, ShieldCheck } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import { apiRequest, APK_DOWNLOAD_URL } from "../api.js";
 import "./AuthScreen.css";
 
@@ -138,11 +139,15 @@ export default function AuthScreen({ onAuthenticated }) {
           <ShieldCheck size={17} />
           <span>Phone contact matching stays off until you verify a phone number. Find people by username instead.</span>
         </div>
-        <a className="auth-download-link" href={APK_DOWNLOAD_URL}>
-          <span>Want the real Android app?</span>
-          <strong>Download APK</strong>
-        </a>
-        <small className="auth-download-note">The public APK link is activated after the first tagged Android release.</small>
+        {!Capacitor.isNativePlatform() && (
+          <>
+            <a className="auth-download-link" href={APK_DOWNLOAD_URL}>
+              <span>Want the real Android app?</span>
+              <strong>Download APK</strong>
+            </a>
+            <small className="auth-download-note">The public APK link is activated after the first tagged Android release.</small>
+          </>
+        )}
       </section>
     </main>
   );
