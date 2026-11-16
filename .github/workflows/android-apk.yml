@@ -44,6 +44,7 @@ jobs:
           npm run build
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_BASE_PATH: /
 
       - name: Sync Capacitor Android
         run: npx cap sync android
