@@ -71,7 +71,7 @@ In Android Studio, run the app on a device/emulator. Contact discovery asks for 
 
 ### Download and install the Android APK
 
-Set the GitHub Actions repository variable `VITE_API_URL` to the deployed API URL. Push a version tag such as `v1.0.0` to build the APK and publish it as a public GitHub Release. Android users can download the APK from **Releases → latest → `blinker-a.apk`** and install the downloaded package; this is a real Android app, not an **Add to Home Screen** shortcut. You can also run **Build Android APK** manually from the Actions tab to produce a temporary test artifact.
+Set the GitHub Actions repository variable `VITE_API_URL` to the deployed API URL. This same variable is used by GitHub Pages and Android builds. Push a version tag such as `v1.0.0` to build the APK and publish it as a public GitHub Release. Android users can download the APK from **Releases → latest → `blinker-a.apk`** and install the downloaded package; this is a real Android app, not an **Add to Home Screen** shortcut. You can also run **Build Android APK** manually from the Actions tab to produce a temporary test artifact.
 
 The workflow currently creates a debug-signed APK for sideload testing, not a Google Play release. Android may require enabling installation from the browser. Debug builds from separate workflow runs may not share the same signing key, so installing an update can require uninstalling the previous build. A persistent private release key and Google Play signing setup are separate requirements; never commit signing keys or passwords.
 
@@ -80,12 +80,12 @@ The workflow currently creates a debug-signed APK for sideload testing, not a Go
 The deployment uses Vercel for the static web app, Render for the persistent Express/Socket.IO API, and a PostgreSQL provider such as Neon. Vercel's serverless functions are not used for the persistent Socket.IO server. Free plans have usage limits and may sleep or change; SMS delivery may incur a separate charge.
 
 1. Push the repository to GitHub and import it into Vercel. The included `vercel.json` builds and serves the Vite app.
-2. Create a PostgreSQL database on Neon (or another PostgreSQL host). In the Vercel project settings, add `VITE_API_URL` with the HTTPS URL of the Render API. Add the same value as a GitHub Actions repository variable named `VITE_API_URL` so Android APK builds connect to the API instead of a local WebView URL.
-3. In Render, create a Blueprint from this repository using `render.yaml`. Set `DATABASE_URL` to the PostgreSQL connection string and `CLIENT_ORIGIN` to the exact Vercel site origin plus Capacitor's Android origin, comma-separated (for example `https://blinker-a.vercel.app,https://localhost`). Render generates `JWT_SECRET`; add the three Twilio values to enable production phone verification.
+2. Create a PostgreSQL database on Neon (or another PostgreSQL host). In the Vercel project settings, add `VITE_API_URL` with the HTTPS URL of the Render API. Add the same URL as a GitHub Actions repository variable named `VITE_API_URL`; the Pages and Android workflows use it when building.
+3. In Render, create a Blueprint from this repository using `render.yaml`. Set `DATABASE_URL` to the PostgreSQL connection string and `CLIENT_ORIGIN` to the exact frontend origin(s) plus Capacitor's Android origin, comma-separated (for example `https://blinker-a.vercel.app,https://codewithabhi004.github.io,https://localhost`). Render generates `JWT_SECRET`; add the three Twilio values to enable production phone verification.
 4. With `DATABASE_URL` set in the local `.env`, run `npm run db:push` once to create/update the database schema. Never publish database or Twilio credentials in the repository.
 5. Redeploy the Vercel frontend after setting `VITE_API_URL`, then build/sync Android with that same API URL.
 
-GitHub Pages remains supported for the static frontend through **Settings → Pages → GitHub Actions**. Its Vite base path is selected automatically in the Pages workflow.
+GitHub Pages remains supported for the static frontend through **Settings → Pages → GitHub Actions**. Its Vite base path and API URL are selected automatically in the Pages workflow; set the repository variable before deploying so login and signup can reach the API.
 
 ## API and realtime events
 
