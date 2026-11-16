@@ -1,9 +1,17 @@
 import { useState } from "react";
-import { ContactRound, MessageSquare, Phone, Plus, Search, UserPlus, X } from "lucide-react";
+import { ContactRound, MessageSquare, Phone, Search, UserPlus, X } from "lucide-react";
 import Avatar from "./Avatar.jsx";
 import "./ContactsModal.css";
 
-export default function ContactsModal({ contacts, onSelectContact, onSearchUsername, onAddContact, onStartCall, onClose }) {
+export default function ContactsModal({
+  contacts,
+  onSelectContact,
+  onSearchUsername,
+  onAddContact,
+  onImportDeviceContacts,
+  onStartCall,
+  onClose
+}) {
   const [query, setQuery] = useState("");
   const [usernameQuery, setUsernameQuery] = useState("");
   const [usernameResult, setUsernameResult] = useState(null);
@@ -96,6 +104,7 @@ export default function ContactsModal({ contacts, onSelectContact, onSearchUsern
               required
             />
             <button type="submit" className="primary-button" disabled={searchingUsername}>
+              <Search size={15} />
               {searchingUsername ? "Searching..." : "Search"}
             </button>
           </div>
@@ -169,6 +178,7 @@ export default function ContactsModal({ contacts, onSelectContact, onSearchUsern
               />
             </div>
             <button type="submit" className="primary-button">
+              <MessageSquare size={15} />
               Save & Start Chat
             </button>
           </form>
@@ -235,7 +245,7 @@ export default function ContactsModal({ contacts, onSelectContact, onSearchUsern
                 className="text-button"
                 onClick={() => setShowAddForm(true)}
               >
-                + Add "{query}" as new contact
+                <UserPlus size={14} /> Add "{query}" as new contact
               </button>
             </div>
           )}

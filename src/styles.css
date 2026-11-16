@@ -2056,6 +2056,11 @@ kbd {
   font-weight: 500;
   margin-top: 6px;
 }
+.settings-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .wallpaper-open-btn:hover { background: var(--panel-soft); }
 
 /* Indian Search Symbol & Badge */

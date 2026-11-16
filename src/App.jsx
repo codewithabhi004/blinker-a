@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Bell, Check, ChevronRight, Moon, Phone, Search, Shield, Sun, Users, X
+  Bell, Check, ChevronRight, ContactRound, Image, Moon, Phone, Search, Shield, Sun, Users, X
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { Capacitor } from "@capacitor/core";
@@ -855,14 +855,16 @@ export default function App() {
             <div className="settings-block">
               <h3>Chat Background</h3>
               <button className="wallpaper-open-btn" onClick={() => { setShowSettings(false); setShowWallpaper(true); }}>
-                Configure WhatsApp Wallpaper & Dimming <ChevronRight size={16} />
+                <span className="settings-option-label"><Image size={16} /> Configure WhatsApp Wallpaper & Dimming</span>
+                <ChevronRight size={16} />
               </button>
             </div>
 
             <div className="settings-block">
               <h3>Phone Directory & Contacts</h3>
               <button className="wallpaper-open-btn" onClick={() => { setShowSettings(false); setShowContacts(true); }}>
-                Open Indian Phone Contacts (+91) <ChevronRight size={16} />
+                <span className="settings-option-label"><ContactRound size={16} /> Open Indian Phone Contacts (+91)</span>
+                <ChevronRight size={16} />
               </button>
             </div>
 
@@ -888,7 +890,7 @@ export default function App() {
 
             <div className="modal-footer">
               <button className="primary-button" onClick={() => setShowSettings(false)}>
-                Done
+                <Check size={16} /> Done
               </button>
             </div>
           </div>
