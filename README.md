@@ -81,7 +81,7 @@ The deployment uses Vercel for the static web app, Render for the persistent Exp
 
 1. Push the repository to GitHub and import it into Vercel. The included `vercel.json` builds and serves the Vite app.
 2. Create a PostgreSQL database on Neon (or another PostgreSQL host). In the Vercel project settings, add `VITE_API_URL` with the HTTPS URL of the Render API. Add the same URL as a GitHub Actions repository variable named `VITE_API_URL`; the Pages and Android workflows use it when building.
-3. In Render, create a Blueprint from this repository using `render.yaml`. Set `DATABASE_URL` to the PostgreSQL connection string and `CLIENT_ORIGIN` to the exact frontend origin(s) plus Capacitor's Android origin, comma-separated (for example `https://blinker-a.vercel.app,https://codewithabhi004.github.io,https://localhost`). Render generates `JWT_SECRET`. Twilio credentials are only needed if phone verification is enabled.
+3. In Render, create a Blueprint from this repository using `render.yaml`. Set `DATABASE_URL` to the PostgreSQL connection string and `CLIENT_ORIGIN` to the exact website frontend origin(s), comma-separated (for example `https://blinker-a.vercel.app,https://codewithabhi004.github.io`). The API automatically allows Capacitor's Android origin (`https://localhost`). Render generates `JWT_SECRET`. Twilio credentials are only needed if phone verification is enabled.
 4. With `DATABASE_URL` set in the local `.env`, run `npm run db:push` once to create/update the database schema. Never publish database or Twilio credentials in the repository.
 5. Redeploy the Vercel frontend after setting `VITE_API_URL`, then build/sync Android with that same API URL.
 

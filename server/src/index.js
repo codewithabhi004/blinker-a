@@ -18,9 +18,12 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
 
 const app = express();
 const httpServer = createServer(app);
-const allowedOrigins = (process.env.CLIENT_ORIGIN ?? "http://localhost:3000")
-  .split(",")
-  .map((origin) => origin.trim());
+const allowedOrigins = [...new Set([
+  ...(process.env.CLIENT_ORIGIN ?? "http://localhost:3000")
+    .split(",")
+    .map((origin) => origin.trim()),
+  "https://localhost"
+])];
 if (process.env.NODE_ENV === "production" && !process.env.CLIENT_ORIGIN) {
   throw new Error("CLIENT_ORIGIN must be configured in production.");
 }
